@@ -5,7 +5,7 @@ on:
       tag:
         description: Published beta installer to test
         required: true
-        default: v0.5.5-beta
+        default: v0.5.6-beta
 permissions:
   contents: read
 jobs:
@@ -95,6 +95,7 @@ jobs:
           } finally {if(!$picker.HasExited){Stop-Process -Id $picker.Id -Force;$picker.WaitForExit()}}
           $codes=@('en','es','fr','de','pt-BR','it')
           $paintLabels=@('Paint','Pintura','Peinture','Lackierung','Pintura','Vernice')
+          $autosaveOff=@('Autosave · Off','Autoguardado · No','Sauvegarde auto · Non','Autospeichern · Aus','Salvar auto · Não','Salvataggio auto · No')
           $offline=@('Photoshop offline','Photoshop desconectado','Photoshop hors ligne','Photoshop offline','Photoshop desconectado','Photoshop non connesso')
           for($lang=0;$lang -lt $codes.Count;$lang++){
             $code=$codes[$lang]
@@ -129,9 +130,21 @@ jobs:
               }
               for($page=0;$page -lt 4;$page++){
                 [PaintUI]::SendMessage($h,0x111,[IntPtr](20+$page),[IntPtr]::Zero) | Out-Null
-                if([PaintUI]::IsWindowVisible([PaintUI]::GetDlgItem($h,103)) -ne ($page -eq 0)){throw "Document visibility wrong on page $page"}
+                foreach($paintId in @(103,104,10,11,12,106)){
+                  if([PaintUI]::IsWindowVisible([PaintUI]::GetDlgItem($h,$paintId)) -ne ($page -eq 0)){throw "Paint control $paintId visibility wrong on page $page"}
+                }
+                $auto=[PaintUI]::GetDlgItem($h,105)
+                if(![PaintUI]::IsWindowVisible($auto) -or [PaintUI]::Text($auto) -ne $autosaveOff[$lang]){throw 'Persistent autosave indicator missing or incorrect'}
+                $ab=[PaintUI]::Bounds($auto);$wb=[PaintUI]::Bounds($h)
+                if($ab.t -lt $wb.t+($wb.b-$wb.t)*0.9){throw 'Autosave status not at bottom'}
               }
               if(![PaintUI]::IsWindowVisible($alert)){throw 'Update badge lost on page switch'}
+              $theme=[PaintUI]::Bounds([PaintUI]::GetDlgItem($h,24))
+              $language=[PaintUI]::Bounds([PaintUI]::GetDlgItem($h,29))
+              $editor=[PaintUI]::Bounds([PaintUI]::GetDlgItem($h,25))
+              $updates=[PaintUI]::Bounds([PaintUI]::GetDlgItem($h,28))
+              $check=[PaintUI]::Bounds([PaintUI]::GetDlgItem($h,27))
+              if($theme.t -ne $language.t -or $editor.t -le $theme.b -or $updates.t -le $editor.b -or $check.t -ne $updates.t){throw 'Settings groups are not ordered/aligned'}
               [PaintUI]::SendMessage($h,0x8036,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
               if([PaintUI]::IsWindowVisible($alert)){throw 'No-update result did not clear the badge'}
               $badge=[PaintUI]::Find($h,$offline[$lang]);if($badge -eq 0){throw 'Missing localized connection status'}
@@ -145,6 +158,7 @@ jobs:
               "SWITCH: requested=$($codes[$next]); selection=$([PaintUI]::SendMessage($choice,0x147,[IntPtr]::Zero,[IntPtr]::Zero)); label=$([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)))"
               Assert-Language $codes[$next]
               if([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)) -ne $paintLabels[$next]){throw 'Language switch did not apply immediately'}
+              if([PaintUI]::Text([PaintUI]::GetDlgItem($h,105)) -ne $autosaveOff[$next]){throw 'Autosave indicator did not translate'}
               if([PaintUI]::Text([PaintUI]::GetDlgItem($h,4)) -ne $car -or [PaintUI]::Text([PaintUI]::GetDlgItem($h,5)) -ne $id){throw 'Language switch changed paint settings'}
             }finally{Close-App $app}
             'UPDATE: preserving language after app close'
@@ -158,4 +172,4 @@ jobs:
           Setup '/S /ID=123456 /PLUGINS=none /LANG=unknown' 14
           if((Get-FileHash $ini).Hash -ne $before){throw 'Invalid language changed settings'}
           foreach($value in @('CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150')){if(!(Get-Content $ini -Raw).Contains($value)){throw "Lost setting $value"}}
-          'PASS: six installer languages; native language picker; immediate app switching; update/restart persistence; invalid-language rejection; paint-only document; clean title; bottom-center connection; numeric version; update badge visibility/pulse/dismissal/clear; paint-mode capitalization.' | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
+          'PASS: six installer languages; native language picker; immediate app switching; update/restart persistence; invalid-language rejection; paint-only document; clean title; bottom-center connection; numeric version; update badge visibility/pulse/dismissal/clear; paint-mode capitalization; Paint-only export controls; persistent autosave indicator; reorganized Settings.' | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
