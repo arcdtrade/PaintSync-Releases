@@ -49,6 +49,7 @@ jobs:
             [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr h,uint m,IntPtr w,string l);
             [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr GetProp(IntPtr h,string name);
             [DllImport("user32.dll",CharSet=CharSet.Unicode,EntryPoint="SendMessageW")] public static extern IntPtr ReadItem(IntPtr h,uint m,IntPtr w,StringBuilder l);
+            [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint action,uint param,out int value,uint flags);
             public static string Item(IntPtr h,int i){var b=new StringBuilder(256);ReadItem(h,0x148,(IntPtr)i,b);return b.ToString();}
             public static string Text(IntPtr h){var s=new StringBuilder(2048);GetWindowText(h,s,2048);return s.ToString();}
             public static string Class(IntPtr h){var s=new StringBuilder(256);GetClassName(h,s,256);return s.ToString();}
@@ -116,7 +117,9 @@ jobs:
               $phase=[PaintUI]::GetProp($alert,'PR.updatePulse')
               $changed=$false
               for($tick=0;$tick -lt 20;$tick++){Start-Sleep -Milliseconds 100;if([PaintUI]::GetProp($alert,'PR.updatePulse') -ne $phase){$changed=$true;break}}
-              if(!$changed){throw 'Update badge did not pulse on this animation-enabled runner'}
+              $animations=1;[PaintUI]::SystemParametersInfo(0x1042,0,[ref]$animations,0) | Out-Null
+              if($animations -ne 0 -and !$changed){throw 'Update badge did not pulse'}
+              if($animations -eq 0 -and [PaintUI]::GetProp($alert,'PR.updatePulse') -ne 1){throw 'Reduced-animation badge not steady'}
               [PaintUI]::SendMessage($h,0x8034,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
               if(![PaintUI]::IsWindowVisible($alert)){throw 'Dismissing update hid the badge'}
               if($code -eq 'en'){
