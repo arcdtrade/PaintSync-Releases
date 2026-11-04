@@ -5,7 +5,7 @@ on:
       tag:
         description: Published beta installer to test
         required: true
-        default: v0.5.4-beta
+        default: v0.5.5-beta
 permissions:
   contents: read
 jobs:
@@ -47,6 +47,9 @@ jobs:
             [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l);
             [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h,uint m,IntPtr w,IntPtr l);
             [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr h,uint m,IntPtr w,string l);
+            [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr GetProp(IntPtr h,string name);
+            [DllImport("user32.dll",CharSet=CharSet.Unicode,EntryPoint="SendMessageW")] public static extern IntPtr ReadItem(IntPtr h,uint m,IntPtr w,StringBuilder l);
+            public static string Item(IntPtr h,int i){var b=new StringBuilder(256);ReadItem(h,0x148,(IntPtr)i,b);return b.ToString();}
             public static string Text(IntPtr h){var s=new StringBuilder(2048);GetWindowText(h,s,2048);return s.ToString();}
             public static string Class(IntPtr h){var s=new StringBuilder(256);GetClassName(h,s,256);return s.ToString();}
             public static IntPtr Find(IntPtr parent,string text,bool className=false){IntPtr found=IntPtr.Zero;EnumChildWindows(parent,(h,l)=>{if((className?Class(h):Text(h))==text){found=h;return false;}return true;},IntPtr.Zero);return found;}
@@ -104,10 +107,30 @@ jobs:
             try{
               $h=$app.MainWindowHandle
               if([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)) -ne $paintLabels[$lang]){throw "App did not launch in $code"}
+              $alert=[PaintUI]::GetDlgItem($h,30)
+              if([PaintUI]::IsWindowVisible($alert)){throw 'Update badge visible before an update'}
+              [PaintUI]::SendMessage($h,0x8035,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+              if(![PaintUI]::IsWindowVisible($alert)){throw 'Missing update badge'}
+              $badgeBounds=[PaintUI]::Bounds($alert);$appBounds=[PaintUI]::Bounds($h)
+              if($badgeBounds.l -lt $appBounds.l+($appBounds.r-$appBounds.l)*0.8 -or $badgeBounds.b -gt $appBounds.t+150){throw 'Update badge is not upper-right'}
+              $phase=[PaintUI]::GetProp($alert,'PR.updatePulse')
+              $changed=$false
+              for($tick=0;$tick -lt 20;$tick++){Start-Sleep -Milliseconds 100;if([PaintUI]::GetProp($alert,'PR.updatePulse') -ne $phase){$changed=$true;break}}
+              if(!$changed){throw 'Update badge did not pulse on this animation-enabled runner'}
+              [PaintUI]::SendMessage($h,0x8034,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+              if(![PaintUI]::IsWindowVisible($alert)){throw 'Dismissing update hid the badge'}
+              if($code -eq 'en'){
+                $types=[PaintUI]::GetDlgItem($h,6)
+                $labels=@('Car · Sim Stamp','Car · Custom Number','Car · Spec Map','Car · Decal Mask')
+                for($type=0;$type -lt 4;$type++){if([PaintUI]::Item($types,$type) -ne $labels[$type]){throw 'Incorrect paint-mode capitalization'}}
+              }
               for($page=0;$page -lt 4;$page++){
                 [PaintUI]::SendMessage($h,0x111,[IntPtr](20+$page),[IntPtr]::Zero) | Out-Null
                 if([PaintUI]::IsWindowVisible([PaintUI]::GetDlgItem($h,103)) -ne ($page -eq 0)){throw "Document visibility wrong on page $page"}
               }
+              if(![PaintUI]::IsWindowVisible($alert)){throw 'Update badge lost on page switch'}
+              [PaintUI]::SendMessage($h,0x8036,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+              if([PaintUI]::IsWindowVisible($alert)){throw 'No-update result did not clear the badge'}
               $badge=[PaintUI]::Find($h,$offline[$lang]);if($badge -eq 0){throw 'Missing localized connection status'}
               $r=[PaintUI]::Bounds($badge);$window=[PaintUI]::Bounds($h)
               if([Math]::Abs(($r.l+$r.r)-($window.l+$window.r)) -gt 4 -or $r.t -lt $window.t+($window.b-$window.t)*0.85){throw 'Connection status not bottom-center'}
@@ -132,4 +155,4 @@ jobs:
           Setup '/S /ID=123456 /PLUGINS=none /LANG=unknown' 14
           if((Get-FileHash $ini).Hash -ne $before){throw 'Invalid language changed settings'}
           foreach($value in @('CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150')){if(!(Get-Content $ini -Raw).Contains($value)){throw "Lost setting $value"}}
-          'PASS: six installer languages; native language picker; immediate app switching; update/restart persistence; invalid-language rejection; paint-only document; clean title; bottom-center connection.' | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
+          'PASS: six installer languages; native language picker; immediate app switching; update/restart persistence; invalid-language rejection; paint-only document; clean title; bottom-center connection; numeric version; update badge visibility/pulse/dismissal/clear; paint-mode capitalization.' | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
