@@ -5,7 +5,7 @@ on:
       tag:
         description: Published beta installer to test
         required: true
-        default: v0.5.3-beta
+        default: v0.5.4-beta
 permissions:
   contents: read
 jobs:
@@ -23,6 +23,8 @@ jobs:
           gh release download "$env:RELEASE_TAG" --repo "$env:RELEASE_REPO" --pattern 'PaintSync-Setup-*-Beta.exe' --dir "$env:RUNNER_TEMP\paintsync-test"
           if ($LASTEXITCODE -ne 0) { throw 'Download failed' }
       - name: Check language picker, persistence and native page layout
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -94,6 +96,10 @@ jobs:
             $code=$codes[$lang]
             Setup "/S /ID=123456 /PLUGINS=none /LANG=$code"
             Assert-Language $code
+            $expectedVersion=$env:RELEASE_TAG -replace '^v','' -replace '-beta$',''
+            $vi=(Get-Item (Join-Path $install 'PaintSync.exe')).VersionInfo
+            $numericVersion="$($vi.FileMajorPart).$($vi.FileMinorPart).$($vi.FileBuildPart)"
+            if($numericVersion -ne $expectedVersion){throw 'Incorrect numeric file version'}
             $app=Launch-App
             try{
               $h=$app.MainWindowHandle
