@@ -1,0 +1,81 @@
+name: Windows update discovery
+on:
+  workflow_dispatch:
+    inputs:
+      expected:
+        description: Expected result from PaintSync 0.5.0
+        required: true
+        default: available
+        type: choice
+        options:
+          - available
+          - current
+permissions:
+  contents: read
+jobs:
+  check-for-updates:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download published 0.5.0 installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          gh release download v0.5.0-beta --repo "$env:RELEASE_REPO" --pattern 'PaintSync-Setup-0.5.0-Beta.exe' --dir "$env:RUNNER_TEMP\paintsync-test"
+          if ($LASTEXITCODE -ne 0) { throw 'Download failed' }
+      - name: Exercise the installed app's Check for updates command
+        env:
+          EXPECTED_RESULT: ${{ inputs.expected }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Add-Type @'
+          using System;
+          using System.Text;
+          using System.Collections.Generic;
+          using System.Runtime.InteropServices;
+          public class UpdateUI {
+            public delegate bool EnumProc(IntPtr h, IntPtr l);
+            [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p, IntPtr l);
+            [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr h, EnumProc p, IntPtr l);
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint id);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+            public static string Text(uint pid) {
+              var lines = new List<string>();
+              EnumProc child = (h,l) => { var s=new StringBuilder(2048); GetWindowText(h,s,2048); if(s.Length>0) lines.Add(s.ToString()); return true; };
+              EnumWindows((h,l) => { uint id; GetWindowThreadProcessId(h,out id); if(id==pid){child(h,l);EnumChildWindows(h,child,IntPtr.Zero);} return true;},IntPtr.Zero);
+              return String.Join("\n",lines);
+            }
+          }
+          '@
+          $install=Join-Path $env:LOCALAPPDATA 'Programs\PaintSync'
+          $data=Join-Path $env:USERPROFILE 'AppData\Local\PaintRelay'
+          New-Item -ItemType Directory -Force $data | Out-Null
+          "[App]`r`nCustomerID=123456`r`n[Updates]`r`nAutomatic=0`r`n" | Set-Content "$data\settings.ini" -Encoding Unicode
+          $setup=Join-Path $env:RUNNER_TEMP 'paintsync-test\PaintSync-Setup-0.5.0-Beta.exe'
+          $p=Start-Process $setup -ArgumentList '/S /ID=123456 /PLUGINS=none' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Setup failed: $($p.ExitCode)" }
+          $app=Start-Process "$install\PaintSync.exe" -PassThru
+          try {
+            for($i=0;$i -lt 30;$i++){Start-Sleep -Milliseconds 500;$app.Refresh();if($app.HasExited){throw 'App exited'};if($app.MainWindowHandle -ne 0){break}}
+            if($app.MainWindowHandle -eq 0){throw 'No app window'}
+            [UpdateUI]::PostMessage($app.MainWindowHandle,0x111,[IntPtr]23,[IntPtr]::Zero) | Out-Null
+            [UpdateUI]::PostMessage($app.MainWindowHandle,0x111,[IntPtr]27,[IntPtr]::Zero) | Out-Null
+            $result='timeout'
+            for($i=0;$i -lt 90;$i++){
+              Start-Sleep -Milliseconds 500
+              $text=[UpdateUI]::Text($app.Id)
+              if($text -match 'A new version of PaintSync is available'){ $result='available';break }
+              if($text -match 'up.to.date|newest version'){ $result='current';break }
+              if($text -match 'error occurred|Updater unavailable'){ $result='error';break }
+            }
+            Write-Output $text
+            if($result -ne $env:EXPECTED_RESULT){throw "Expected $env:EXPECTED_RESULT; received $result"}
+            if($result -eq 'available' -and $text -notmatch '0\.5\.1'){throw 'Wrong release offered'}
+            "PASS: Published PaintSync 0.5.0 manual update check returned $result. Live beta feed tested with the actual installed app and bundled WinSparkle DLL." | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
+          } finally {
+            if(!$app.HasExited){[UpdateUI]::PostMessage($app.MainWindowHandle,0x10,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null;$app.WaitForExit(10000) | Out-Null}
+          }
