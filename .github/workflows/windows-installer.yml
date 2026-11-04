@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Draft release tag to test
+        description: Published beta release tag to test
         required: true
         default: v0.5.0-beta
 permissions:
@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - name: Download draft installer
+      - name: Download release installer
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
