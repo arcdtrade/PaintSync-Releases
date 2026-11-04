@@ -62,7 +62,7 @@ jobs:
           New-Item -ItemType Directory -Force $data,$paint | Out-Null
           "[App]`r`nCustomerID=123456`r`nSeconds=0.5`r`nRoot=$paint`r`n[Appearance]`r`nTheme=2`r`n[Updates]`r`nAutomatic=0`r`n[Document.Test]`r`nVehicle=trucks fordf150`r`n" | Set-Content $ini -Encoding Unicode
           function Setup([string]$arguments,[int]$exit=0){$p=Start-Process $setup -ArgumentList $arguments -Wait -PassThru;if($p.ExitCode -ne $exit){throw "Setup exit $($p.ExitCode), expected $exit"}}
-          function Assert-Language([string]$code){if((Get-Content $ini -Raw) -notmatch "(?m)^Language=$([regex]::Escape($code))\r?$"){throw "Language not saved: $code"}}
+          function Assert-Language([string]$code){if((Get-Content $ini -Raw) -notmatch "(?m)^Language=$([regex]::Escape($code))\r?$"){Write-Output (Get-Content $ini -Raw);throw "Language not saved: $code"}}
           function Launch-App {
             $p=Start-Process "$install\PaintSync.exe" -PassThru
             for($i=0;$i -lt 40;$i++){Start-Sleep -Milliseconds 250;$p.Refresh();if($p.HasExited){throw 'App exited'};if($p.MainWindowHandle -ne 0){break}}
@@ -110,10 +110,13 @@ jobs:
               $car=[PaintUI]::Text([PaintUI]::GetDlgItem($h,4));$id=[PaintUI]::Text([PaintUI]::GetDlgItem($h,5))
               [PaintUI]::SendMessage($choice,0x14e,[IntPtr]$next,[IntPtr]::Zero) | Out-Null
               [PaintUI]::SendMessage($h,0x111,[IntPtr](0x10000+29),$choice) | Out-Null
+              "SWITCH: requested=$($codes[$next]); selection=$([PaintUI]::SendMessage($choice,0x147,[IntPtr]::Zero,[IntPtr]::Zero)); label=$([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)))"
+              Write-Output ([PaintUI]::All($h))
               Assert-Language $codes[$next]
               if([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)) -ne $paintLabels[$next]){throw 'Language switch did not apply immediately'}
               if([PaintUI]::Text([PaintUI]::GetDlgItem($h,4)) -ne $car -or [PaintUI]::Text([PaintUI]::GetDlgItem($h,5)) -ne $id){throw 'Language switch changed paint settings'}
             }finally{Close-App $app}
+            'UPDATE: preserving language after app close'
             Setup '/S /UPDATE /PLUGINS=none'
             Assert-Language $codes[$next]
             $app=Launch-App
