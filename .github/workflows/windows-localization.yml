@@ -5,7 +5,7 @@ on:
       tag:
         description: Published beta installer to test
         required: true
-        default: v0.5.2-beta
+        default: v0.5.3-beta
 permissions:
   contents: read
 jobs:
@@ -111,7 +111,6 @@ jobs:
               [PaintUI]::SendMessage($choice,0x14e,[IntPtr]$next,[IntPtr]::Zero) | Out-Null
               [PaintUI]::SendMessage($h,0x111,[IntPtr](0x10000+29),$choice) | Out-Null
               "SWITCH: requested=$($codes[$next]); selection=$([PaintUI]::SendMessage($choice,0x147,[IntPtr]::Zero,[IntPtr]::Zero)); label=$([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)))"
-              Write-Output ([PaintUI]::All($h))
               Assert-Language $codes[$next]
               if([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)) -ne $paintLabels[$next]){throw 'Language switch did not apply immediately'}
               if([PaintUI]::Text([PaintUI]::GetDlgItem($h,4)) -ne $car -or [PaintUI]::Text([PaintUI]::GetDlgItem($h,5)) -ne $id){throw 'Language switch changed paint settings'}
