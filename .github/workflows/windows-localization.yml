@@ -1,0 +1,126 @@
+name: Windows language and layout checks
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published beta installer to test
+        required: true
+        default: v0.5.2-beta
+permissions:
+  contents: read
+jobs:
+  languages-and-layout:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - name: Download installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          gh release download "$env:RELEASE_TAG" --repo "$env:RELEASE_REPO" --pattern 'PaintSync-Setup-*-Beta.exe' --dir "$env:RUNNER_TEMP\paintsync-test"
+          if ($LASTEXITCODE -ne 0) { throw 'Download failed' }
+      - name: Check language picker, persistence and native page layout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Add-Type @'
+          using System;
+          using System.Text;
+          using System.Collections.Generic;
+          using System.Runtime.InteropServices;
+          public class PaintUI {
+            public delegate bool EnumProc(IntPtr h, IntPtr l);
+            [StructLayout(LayoutKind.Sequential)] public struct Rect {public int l,t,r,b;}
+            [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p,IntPtr l);
+            [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr h,EnumProc p,IntPtr l);
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint id);
+            [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h,StringBuilder s,int n);
+            [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h,StringBuilder s,int n);
+            [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr h,int id);
+            [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out Rect r);
+            [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l);
+            [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h,uint m,IntPtr w,IntPtr l);
+            [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr h,uint m,IntPtr w,string l);
+            public static string Text(IntPtr h){var s=new StringBuilder(2048);GetWindowText(h,s,2048);return s.ToString();}
+            public static string Class(IntPtr h){var s=new StringBuilder(256);GetClassName(h,s,256);return s.ToString();}
+            public static IntPtr Find(IntPtr parent,string text,bool className=false){IntPtr found=IntPtr.Zero;EnumChildWindows(parent,(h,l)=>{if((className?Class(h):Text(h))==text){found=h;return false;}return true;},IntPtr.Zero);return found;}
+            public static IntPtr Window(uint pid,string prefix){IntPtr found=IntPtr.Zero;EnumWindows((h,l)=>{uint id;GetWindowThreadProcessId(h,out id);if(id==pid&&Text(h).StartsWith(prefix)){found=h;return false;}return true;},IntPtr.Zero);return found;}
+            public static string All(IntPtr h){var a=new List<string>();EnumChildWindows(h,(c,l)=>{a.Add(Text(c));return true;},IntPtr.Zero);return String.Join("\n",a);}
+            public static Rect Bounds(IntPtr h){Rect r;GetWindowRect(h,out r);return r;}
+          }
+          '@
+          $setup=(Get-ChildItem "$env:RUNNER_TEMP\paintsync-test\*.exe").FullName
+          $install=Join-Path $env:LOCALAPPDATA 'Programs\PaintSync'
+          $data=Join-Path $env:USERPROFILE 'AppData\Local\PaintRelay'
+          $ini=Join-Path $data 'settings.ini'
+          $paint=Join-Path $env:RUNNER_TEMP 'iRacing\paint'
+          New-Item -ItemType Directory -Force $data,$paint | Out-Null
+          "[App]`r`nCustomerID=123456`r`nSeconds=0.5`r`nRoot=$paint`r`n[Appearance]`r`nTheme=2`r`n[Updates]`r`nAutomatic=0`r`n[Document.Test]`r`nVehicle=trucks fordf150`r`n" | Set-Content $ini -Encoding Unicode
+          function Setup([string]$arguments,[int]$exit=0){$p=Start-Process $setup -ArgumentList $arguments -Wait -PassThru;if($p.ExitCode -ne $exit){throw "Setup exit $($p.ExitCode), expected $exit"}}
+          function Assert-Language([string]$code){if((Get-Content $ini -Raw) -notmatch "(?m)^Language=$([regex]::Escape($code))\r?$"){throw "Language not saved: $code"}}
+          function Launch-App {
+            $p=Start-Process "$install\PaintSync.exe" -PassThru
+            for($i=0;$i -lt 40;$i++){Start-Sleep -Milliseconds 250;$p.Refresh();if($p.HasExited){throw 'App exited'};if($p.MainWindowHandle -ne 0){break}}
+            if($p.MainWindowHandle -eq 0){throw 'Missing app window'}
+            if([PaintUI]::Text($p.MainWindowHandle) -ne 'PaintSync'){throw 'Incorrect window title'}
+            return $p
+          }
+          function Close-App($p){$p.CloseMainWindow() | Out-Null;if(!$p.WaitForExit(10000)){throw 'App did not close'}}
+          # Interactive setup must ask for language before the welcome page.
+          $picker=Start-Process $setup -ArgumentList '/ID=123456 /PLUGINS=none' -PassThru
+          try {
+            $h=[IntPtr]::Zero
+            for($i=0;$i -lt 40;$i++){Start-Sleep -Milliseconds 250;$h=[PaintUI]::Window($picker.Id,'PaintSync — Language');if($h -ne 0){break}}
+            if($h -eq 0){throw 'No installation language picker'}
+            $combo=[PaintUI]::Find($h,'ComboBox',$true)
+            $index=[PaintUI]::SendMessageW($combo,0x158,[IntPtr](-1),'Français').ToInt32()
+            if($index -lt 0){throw 'French missing from language picker'}
+            [PaintUI]::SendMessage($combo,0x14e,[IntPtr]$index,[IntPtr]::Zero) | Out-Null
+            [PaintUI]::PostMessage([PaintUI]::GetDlgItem($h,1),0xf5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+            $welcome=''
+            for($i=0;$i -lt 40;$i++){Start-Sleep -Milliseconds 250;$h=[PaintUI]::Window($picker.Id,'PaintSync 0.5.2');if($h -ne 0){$welcome=[PaintUI]::All($h);if($welcome.Contains('Installez PaintSync')){break}}}
+            if(!$welcome.Contains('Installez PaintSync')){throw 'Language picker did not translate the welcome page'}
+            'PASS: interactive language picker and French welcome page.'
+          } finally {if(!$picker.HasExited){Stop-Process -Id $picker.Id -Force;$picker.WaitForExit()}}
+          $codes=@('en','es','fr','de','pt-BR','it')
+          $paintLabels=@('Paint','Pintura','Peinture','Lackierung','Pintura','Vernice')
+          $offline=@('Photoshop offline','Photoshop desconectado','Photoshop hors ligne','Photoshop offline','Photoshop desconectado','Photoshop non connesso')
+          for($lang=0;$lang -lt $codes.Count;$lang++){
+            $code=$codes[$lang]
+            Setup "/S /ID=123456 /PLUGINS=none /LANG=$code"
+            Assert-Language $code
+            $app=Launch-App
+            try{
+              $h=$app.MainWindowHandle
+              if([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)) -ne $paintLabels[$lang]){throw "App did not launch in $code"}
+              for($page=0;$page -lt 4;$page++){
+                [PaintUI]::SendMessage($h,0x111,[IntPtr](20+$page),[IntPtr]::Zero) | Out-Null
+                if([PaintUI]::IsWindowVisible([PaintUI]::GetDlgItem($h,103)) -ne ($page -eq 0)){throw "Document visibility wrong on page $page"}
+              }
+              $badge=[PaintUI]::Find($h,$offline[$lang]);if($badge -eq 0){throw 'Missing localized connection status'}
+              $r=[PaintUI]::Bounds($badge);$window=[PaintUI]::Bounds($h)
+              if([Math]::Abs(($r.l+$r.r)-($window.l+$window.r)) -gt 4 -or $r.t -lt $window.t+($window.b-$window.t)*0.85){throw 'Connection status not bottom-center'}
+              $choice=[PaintUI]::GetDlgItem($h,29)
+              $next=($lang+1)%6
+              $car=[PaintUI]::Text([PaintUI]::GetDlgItem($h,4));$id=[PaintUI]::Text([PaintUI]::GetDlgItem($h,5))
+              [PaintUI]::SendMessage($choice,0x14e,[IntPtr]$next,[IntPtr]::Zero) | Out-Null
+              [PaintUI]::SendMessage($h,0x111,[IntPtr](0x10000+29),$choice) | Out-Null
+              Assert-Language $codes[$next]
+              if([PaintUI]::Text([PaintUI]::GetDlgItem($h,20)) -ne $paintLabels[$next]){throw 'Language switch did not apply immediately'}
+              if([PaintUI]::Text([PaintUI]::GetDlgItem($h,4)) -ne $car -or [PaintUI]::Text([PaintUI]::GetDlgItem($h,5)) -ne $id){throw 'Language switch changed paint settings'}
+            }finally{Close-App $app}
+            Setup '/S /UPDATE /PLUGINS=none'
+            Assert-Language $codes[$next]
+            $app=Launch-App
+            try{if([PaintUI]::Text([PaintUI]::GetDlgItem($app.MainWindowHandle,20)) -ne $paintLabels[$next]){throw 'Language lost after update/restart'}}finally{Close-App $app}
+            "PASS: $code install; immediate language change; update and restart preserve choice; title, document visibility and bottom-center status."
+          }
+          $before=(Get-FileHash $ini).Hash
+          Setup '/S /ID=123456 /PLUGINS=none /LANG=unknown' 14
+          if((Get-FileHash $ini).Hash -ne $before){throw 'Invalid language changed settings'}
+          foreach($value in @('CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150')){if(!(Get-Content $ini -Raw).Contains($value)){throw "Lost setting $value"}}
+          'PASS: six installer languages; native language picker; immediate app switching; update/restart persistence; invalid-language rejection; paint-only document; clean title; bottom-center connection.' | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
