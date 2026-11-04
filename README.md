@@ -6,7 +6,9 @@ PaintSync exports live paint updates from Photoshop, Illustrator or GIMP to the 
 
 ## Download
 
-[Download PaintSync 0.5.0 Beta for Windows x64](https://github.com/arcdtrade/PaintSync-Releases/releases/download/v0.5.0-beta/PaintSync-Setup-0.5.0-Beta.exe) · [Release notes and checksums](https://github.com/arcdtrade/PaintSync-Releases/releases/tag/v0.5.0-beta)
+0.5.1 fixes the vertical alignment of the NEXT EXPORT label and filename.
+
+[Download PaintSync 0.5.1 Beta for Windows x64](https://github.com/arcdtrade/PaintSync-Releases/releases/download/v0.5.1-beta/PaintSync-Setup-0.5.1-Beta.exe) · [Release notes and checksums](https://github.com/arcdtrade/PaintSync-Releases/releases/tag/v0.5.1-beta)
 
 Run Setup, enter your iRacing Customer ID, and select the editor plugins you use. Setup installs for your Windows account and preserves existing paints and saved settings. The supported desktop target is Windows 11 x64.
 
@@ -20,7 +22,7 @@ The `beta-channel` release holds `appcast.xml`; versioned releases hold the inst
 
 ## Beta status
 
-Windows installation, invalid-ID rejection, settings preservation, native app startup/close, upgrade installation, and uninstall checks passed on the Windows Server 2025 runner. [View the checks](https://github.com/arcdtrade/PaintSync-Releases/actions/runs/41790517793).
+Windows installation, invalid-ID rejection, settings preservation, native app startup/close, upgrade installation, and uninstall checks passed on the Windows Server 2025 runner. [View the checks](https://github.com/arcdtrade/PaintSync-Releases/actions/runs/41793512475).
 
 Live Adobe/GIMP/iRacing export checks and the complete interactive updater flow still require beta testing on a Windows desktop. This beta is not Authenticode-signed, so Windows may show an unknown-publisher warning. Ed25519 update verification is separate from Windows code signing.
 
