@@ -6,9 +6,9 @@ PaintSync exports live paint updates from Photoshop, Illustrator or GIMP to the 
 
 ## Download
 
-0.5.5 adds readable update notes, a pulsing update button in the upper-right app header and consistently capitalized paint modes. It includes distinct top tabs with a solid red active tab, bottom-center connection status, a clean PaintSync window title, and document details only on Paint. It also adds six app/installer languages and the missing Photoshop dock brush icon.
+0.5.6 gives every top tab its own outlined surface while keeping the active tab red with black text. Export controls and last-export details appear only on Paint. A persistent bottom strip shows Autosave On/Off/Switching, editor connection and version. Settings is reorganized into Appearance and Language, Source Editor, App Updates and About. All earlier localization, plugin-icon and updater improvements are included.
 
-[Download PaintSync 0.5.5 Beta for Windows x64](https://github.com/arcdtrade/PaintSync-Releases/releases/download/v0.5.5-beta/PaintSync-Setup-0.5.5-Beta.exe) · [Release notes and checksums](https://github.com/arcdtrade/PaintSync-Releases/releases/tag/v0.5.5-beta)
+[Download PaintSync 0.5.6 Beta for Windows x64](https://github.com/arcdtrade/PaintSync-Releases/releases/download/v0.5.6-beta/PaintSync-Setup-0.5.6-Beta.exe) · [Release notes and checksums](https://github.com/arcdtrade/PaintSync-Releases/releases/tag/v0.5.6-beta)
 
 Run Setup, choose your language, enter your iRacing Customer ID, and select the editor plugins you use. English, Spanish, French, German, Brazilian Portuguese and Italian are supported. Settings can change the app language immediately; updates preserve the choice. Setup installs for your Windows account and preserves existing paints and saved settings. The supported desktop target is Windows 11 x64.
 
@@ -22,9 +22,9 @@ The `beta-channel` release holds `appcast.xml`; versioned releases hold the inst
 
 ## Beta status
 
-[All six languages, interactive Setup language selection, language switching/persistence, native page layout, numeric version, update-icon behavior and paint-mode capitalization](https://github.com/arcdtrade/PaintSync-Releases/actions/runs/41804453255) passed for the published 0.5.5 installer on the Windows runner. [An installed 0.5.0 client successfully found 0.5.5 through the live update feed](https://github.com/arcdtrade/PaintSync-Releases/actions/runs/41805400550). Local rendering, packaging and signature checks also passed.
+[Windows checks passed for the published 0.5.6 installer](https://github.com/arcdtrade/PaintSync-Releases/actions/runs/41808021072): six languages, installer and app language persistence, Paint-only actions, persistent autosave footer, Settings group alignment, version metadata and update-icon behavior. Local drawing, state-transition, layout and signature checks passed. The public installer was verified byte-for-byte against the signed build.
 
-0.5.5 includes the earlier installer language-persistence fix. Plugin panel text, external websites and editor-provided diagnostics retain their original language.
+0.5.6 includes the earlier installer language-persistence fix. Plugin panel text, external websites and editor-provided diagnostics retain their original language.
 
 Live Photoshop dock rendering and Adobe/GIMP/iRacing export checks and the complete interactive updater flow still require beta testing on a Windows desktop. This beta is not Authenticode-signed, so Windows may show an unknown-publisher warning. Ed25519 update verification is separate from Windows code signing.
 
