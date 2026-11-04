@@ -2,6 +2,10 @@ name: Windows update discovery
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: Release version the app must offer
+        required: true
+        default: 0.5.2
       expected:
         description: Expected result from PaintSync 0.5.0
         required: true
@@ -28,6 +32,7 @@ jobs:
       - name: Exercise the installed app's Check for updates command
         env:
           EXPECTED_RESULT: ${{ inputs.expected }}
+          EXPECTED_VERSION: ${{ inputs.version }}
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -74,7 +79,7 @@ jobs:
             }
             Write-Output $text
             if($result -ne $env:EXPECTED_RESULT){throw "Expected $env:EXPECTED_RESULT; received $result"}
-            if($result -eq 'available' -and $text -notmatch '0\.5\.1'){throw 'Wrong release offered'}
+            if($result -eq 'available' -and $text -notmatch [regex]::Escape($env:EXPECTED_VERSION)){throw 'Wrong release offered'}
             "PASS: Published PaintSync 0.5.0 manual update check returned $result. Live beta feed tested with the actual installed app and bundled WinSparkle DLL." | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
           } finally {
             if(!$app.HasExited){[UpdateUI]::PostMessage($app.MainWindowHandle,0x10,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null;$app.WaitForExit(10000) | Out-Null}
