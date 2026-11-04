@@ -50,6 +50,7 @@ jobs:
             public static IntPtr Find(IntPtr parent,string text,bool className=false){IntPtr found=IntPtr.Zero;EnumChildWindows(parent,(h,l)=>{if((className?Class(h):Text(h))==text){found=h;return false;}return true;},IntPtr.Zero);return found;}
             public static IntPtr Window(uint pid,string prefix){IntPtr found=IntPtr.Zero;EnumWindows((h,l)=>{uint id;GetWindowThreadProcessId(h,out id);if(id==pid&&Text(h).StartsWith(prefix)){found=h;return false;}return true;},IntPtr.Zero);return found;}
             public static string All(IntPtr h){var a=new List<string>();EnumChildWindows(h,(c,l)=>{a.Add(Text(c));return true;},IntPtr.Zero);return String.Join("\n",a);}
+            public static string ProcessText(uint pid){var a=new List<string>();EnumWindows((h,l)=>{uint id;GetWindowThreadProcessId(h,out id);if(id==pid){a.Add(Text(h));a.Add(All(h));}return true;},IntPtr.Zero);return String.Join("\n",a);}
             public static Rect Bounds(IntPtr h){Rect r;GetWindowRect(h,out r);return r;}
           }
           '@
@@ -82,8 +83,8 @@ jobs:
             [PaintUI]::SendMessage($combo,0x14e,[IntPtr]$index,[IntPtr]::Zero) | Out-Null
             [PaintUI]::PostMessage([PaintUI]::GetDlgItem($h,1),0xf5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
             $welcome=''
-            for($i=0;$i -lt 40;$i++){Start-Sleep -Milliseconds 250;$h=[PaintUI]::Window($picker.Id,'PaintSync 0.5.2');if($h -ne 0){$welcome=[PaintUI]::All($h);if($welcome.Contains('Installez PaintSync')){break}}}
-            if(!$welcome.Contains('Installez PaintSync')){throw 'Language picker did not translate the welcome page'}
+            for($i=0;$i -lt 40;$i++){Start-Sleep -Milliseconds 250;$welcome=[PaintUI]::ProcessText($picker.Id);if($welcome.Contains('Installez PaintSync')){break}}
+            if(!$welcome.Contains('Installez PaintSync')){Write-Output $welcome;throw 'Language picker did not translate the welcome page'}
             'PASS: interactive language picker and French welcome page.'
           } finally {if(!$picker.HasExited){Stop-Process -Id $picker.Id -Force;$picker.WaitForExit()}}
           $codes=@('en','es','fr','de','pt-BR','it')
