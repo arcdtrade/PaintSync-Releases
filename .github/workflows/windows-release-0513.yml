@@ -1,0 +1,88 @@
+name: Windows 0.5.13 release checks
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published beta release tag to test
+        required: true
+        default: v0.5.13-beta
+permissions:
+  contents: read
+jobs:
+  install-upgrade-uninstall:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download release installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          gh release download "$env:RELEASE_TAG" --repo "$env:RELEASE_REPO" --pattern 'PaintSync-Setup-*-Beta.exe' --dir "$env:RUNNER_TEMP\paintsync-test"
+          if ($LASTEXITCODE -ne 0) { throw 'Download failed' }
+          $setup=(Get-ChildItem "$env:RUNNER_TEMP\paintsync-test\*.exe").FullName
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() -ne 'c2b4d4a1b24158f000620c5f2ca496335b2e4888186cde2bb82f209f29d2338a') { throw 'Installer bytes differ from approved 0.5.13 build' }
+      - name: Verify setup, upgrades, app launch, and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $setup=(Get-ChildItem "$env:RUNNER_TEMP\paintsync-test\*.exe").FullName
+          $install=Join-Path $env:LOCALAPPDATA 'Programs\PaintSync'
+          $data=Join-Path $env:USERPROFILE 'AppData\Local\PaintRelay'
+          $settings=Join-Path $data 'settings.ini'
+          $paint=Join-Path $env:RUNNER_TEMP 'iRacing\paint'
+          New-Item -ItemType Directory -Force $data,$paint | Out-Null
+          'KEEP PAINT' | Set-Content (Join-Path $paint 'sentinel.tga')
+          "[App]`r`nCustomerID=111111`r`nSeconds=0.5`r`nRoot=$paint`r`n[Appearance]`r`nTheme=2`r`n[Updates]`r`nAutomatic=0`r`n[Document.Test]`r`nVehicle=trucks fordf150`r`n" | Set-Content $settings -Encoding Unicode
+          function Run-Setup([string]$arguments,[int]$expected=0) {
+            $p=Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru
+            if ($p.ExitCode -ne $expected) { throw "Setup returned $($p.ExitCode), expected $expected" }
+          }
+          $before=(Get-FileHash $settings).Hash
+          Run-Setup '/S /ID=0 /PLUGINS=none' 13
+          if ((Get-FileHash $settings).Hash -ne $before) { throw 'Invalid ID modified settings' }
+          Run-Setup '/S /ID=123456 /PLUGINS=none'
+          if (!(Test-Path "$install\PaintSync.exe") -or !(Test-Path "$install\WinSparkle.dll")) { throw 'Missing app or updater' }
+          $text=Get-Content $settings -Raw
+          foreach ($value in @('CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150')) { if (!$text.Contains($value)) { throw "Missing preserved setting $value" } }
+          if (Test-Path "$install\Branding") { throw 'Unexpected standalone branding bundle' }
+          if (!(Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\PaintSync\PaintSync.lnk")) { throw 'Missing Start shortcut' }
+          if (!(Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync')) { throw 'Missing uninstall entry' }
+          $app=Start-Process "$install\PaintSync.exe" -PassThru
+          for ($i=0;$i -lt 20;$i++) { Start-Sleep -Milliseconds 500; $app.Refresh(); if ($app.HasExited) { throw 'App exited on startup' }; if ($app.MainWindowHandle -ne 0) { break } }
+          if ($app.MainWindowHandle -eq 0) { throw 'App did not create its window' }
+          $app.CloseMainWindow() | Out-Null
+          if (!$app.WaitForExit(10000)) { throw 'App did not close gracefully' }
+          New-Item -ItemType Directory -Force "$install\Branding" | Out-Null
+          'old packaged logo' | Set-Content "$install\Branding\PaintSync-Logo.svg"
+          'user file to retain' | Set-Content "$install\Branding\user-artwork.txt"
+          Run-Setup '/S /UPDATE /PLUGINS=none'
+          if (Test-Path "$install\Branding\PaintSync-Logo.svg") { throw 'Known legacy branding was not removed' }
+          if (!(Test-Path "$install\Branding\user-artwork.txt")) { throw 'Upgrade removed unrelated user artwork' }
+          $text=Get-Content $settings -Raw
+          foreach ($value in @('CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150')) { if (!$text.Contains($value)) { throw "Upgrade lost $value" } }
+          $before=(Get-FileHash $settings).Hash
+          Run-Setup '/S /ID=12x34 /PLUGINS=none' 13
+          if ((Get-FileHash $settings).Hash -ne $before) { throw 'Invalid update ID modified settings' }
+          foreach($language in @('en','es','fr','de','pt-BR','it')) {
+            Run-Setup "/S /UPDATE /PLUGINS=none /LANG=$language"
+            $text=Get-Content $settings -Raw
+            if ($text -notmatch "(?m)^Language=$([regex]::Escape($language))\r?$") { throw "Language not saved: $language" }
+            $app=Start-Process "$install\PaintSync.exe" -PassThru
+            for ($i=0;$i -lt 40;$i++) { Start-Sleep -Milliseconds 250; $app.Refresh(); if($app.HasExited) { throw "App exited in $language" }; if($app.MainWindowHandle -ne 0) { break } }
+            if($app.MainWindowHandle -eq 0) { throw "No window in $language" }
+            if($app.MainWindowTitle -ne 'PaintSync') { throw 'Wrong app title' }
+            $app.CloseMainWindow() | Out-Null
+            if(!$app.WaitForExit(10000)) { throw 'App did not close' }
+            Run-Setup '/S /UPDATE /PLUGINS=none'
+            if((Get-Content $settings -Raw) -notmatch "(?m)^Language=$([regex]::Escape($language))\r?$") { throw "Update reset language $language" }
+          }
+          $vi=(Get-Item "$install\PaintSync.exe").VersionInfo
+          if("$($vi.FileMajorPart).$($vi.FileMinorPart).$($vi.FileBuildPart)" -ne '0.5.13') { throw 'Wrong numeric app version' }
+          Start-Process "$install\Uninstall.exe" -ArgumentList '/S' -Wait
+          for ($i=0;$i -lt 30 -and (Test-Path "$install\PaintSync.exe");$i++) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path "$install\PaintSync.exe") { throw 'App was not uninstalled' }
+          if (!(Test-Path $settings) -or !(Test-Path (Join-Path $paint 'sentinel.tga'))) { throw 'Uninstall removed settings or paints' }
+          'PASS: ID validation; settings and routes retained; branding bundle removed; unrelated artwork retained; six languages and upgrade persistence; shortcuts; uninstall registration; native app startup/close; update install; uninstall preserves data.' | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
