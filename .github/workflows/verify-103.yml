@@ -250,9 +250,11 @@ jobs:
           with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync') as key:
               assert winreg.QueryValueEx(key,'DisplayVersion')[0]=='1.0.5'
           subprocess.run([str(install/'Uninstall.exe'),'/S'],check=True,timeout=60)
-          for _ in range(40):
-              if not (install/'PaintSync.exe').exists():break
+          removed=[install/'PaintSync.exe',install/'Read-Me.txt',start_menu/'User guide.lnk',install/'Plugins/SavedImage-Link/PaintSyncImageLink.exe']
+          for _ in range(240):
+              if all(not path.exists() for path in removed):break
               time.sleep(.25)
+          assert all(not path.exists() for path in removed),'Uninstall did not finish removing its app, guide, shortcuts and Image Link'
           assert not (install/'PaintSync.exe').exists()
           assert not (install/'Read-Me.txt').exists() and not (start_menu/'User guide.lnk').exists()
           assert settings.exists() and license_file.read_bytes()==license_before and sentinel.read_bytes()==b'KEEP PAINT'
