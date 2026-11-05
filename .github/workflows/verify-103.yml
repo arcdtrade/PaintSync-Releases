@@ -10,7 +10,7 @@ concurrency:
   group: paintsync-103-verification
   cancel-in-progress: false
 jobs:
-  verify-and-publish:
+  verify-installation:
     runs-on: windows-latest
     timeout-minutes: 15
     env:
@@ -26,9 +26,9 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           releases=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases?per_page=100']))
           matches=[release for release in releases if release['name']=='PaintSync 1.0.3']
-          assert len(matches)==1, 'Expected exactly one 1.0.3 release draft'
+          assert len(matches)==1, 'Expected exactly one 1.0.3 release'
           release=matches[0]
-          assert not release['prerelease'] and (release['tag_name']=='v1.0.3' or release['draft'])
+          assert release['tag_name']=='v1.0.3' and not release['draft']
           expected={'PaintSync-Setup-1.0.3.exe': '760daf30aa3ff4c19302a5f040a4aad71f64d07ed85cbeee38ad91b4731aab12', 'appcast.xml': '6d3fae58b7456f7d5409f1cabbef10f6a8c0a5c706f793d615b4a394e63b25c4', 'SHA256SUMS.txt': '8d003cdd7bfa277e1bfcda707b7f2bbe2e08035977c4fae127326330fb2e720d'}
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-103'
           root.mkdir()
@@ -101,7 +101,7 @@ jobs:
                           for hwnd in windows():
                               @cb
                               def child(handle,param):
-                                  text=ctypes.create_unicode_buffer(1034);gui.GetWindowTextW(handle,text,1034)
+                                  text=ctypes.create_unicode_buffer(1024);gui.GetWindowTextW(handle,text,1024)
                                   if text.value==expected and gui.IsWindowVisible(handle):matches.append((hwnd,handle))
                                   return True
                               gui.EnumChildWindows(hwnd,child,0)
