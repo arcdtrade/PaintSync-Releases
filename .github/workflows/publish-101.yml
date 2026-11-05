@@ -1,0 +1,205 @@
+name: Verify PaintSync 1.0.1 installer
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-101.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: paintsync-101-verification
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Install signature verifier
+        run: python -m pip install cryptography==46.0.3
+      - name: Download and verify the release files
+        shell: python
+        run: |
+          import base64, hashlib, json, os, pathlib, subprocess, xml.etree.ElementTree as ET
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+          repo=os.environ['GITHUB_REPOSITORY']
+          release=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/434846359']))
+          assert release['tag_name']=='v1.0.1' and not release['prerelease']
+          expected={'PaintSync-Setup-1.0.1.exe':'6359541c526dc3a586bd2b1ee28062f06f5381ee23d6141f676fc17346e6fca6','appcast.xml':'1582211e1f84075fa36f42d0a6b5ab782b2f66313f01c2cb9d74fd1822cb6d9b','SHA256SUMS.txt':'abb61ba2fcaeb44171434d432736537d4e697e3e65aac5aef1c96d15d119a4a2'}
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-101'
+          root.mkdir()
+          assets={a['name']:a for a in release['assets']}
+          for name,digest in expected.items():
+              asset=assets[name]
+              with (root/name).open('wb') as output:
+                  subprocess.run(['gh','api',f"repos/{repo}/releases/assets/{asset['id']}",'-H','Accept: application/octet-stream'],stdout=output,check=True)
+              assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest, name
+          ns='{http://www.andymatuschak.org/xml-namespaces/sparkle}'
+          item=ET.fromstring((root/'appcast.xml').read_bytes()).find('channel/item')
+          enclosure=item.find('enclosure')
+          assert item.find(ns+'version').text=='1.0.1'
+          assert enclosure.attrib['url']==f'https://github.com/{repo}/releases/download/v1.0.1/PaintSync-Setup-1.0.1.exe'
+          assert enclosure.attrib[ns+'installerArguments']=='/UPDATE'
+          raw=(root/'PaintSync-Setup-1.0.1.exe').read_bytes()
+          assert int(enclosure.attrib['length'])==len(raw)
+          Ed25519PublicKey.from_public_bytes(base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')).verify(base64.b64decode(enclosure.attrib[ns+'edSignature']),raw)
+          print('PASS: exact approved installer, feed, checksum, version and Ed25519 update signature.')
+      - name: Test installation, activation gate, upgrade and uninstall
+        shell: python
+        run: |
+          import ctypes, hashlib, os, pathlib, struct, subprocess, time, winreg
+          from ctypes import wintypes
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-101'
+          setup=root/'PaintSync-Setup-1.0.1.exe'
+          install=pathlib.Path(os.environ['LOCALAPPDATA'])/'Programs/PaintSync'
+          data=pathlib.Path(os.environ['USERPROFILE'])/'AppData/Local/PaintRelay'
+          data.mkdir(parents=True,exist_ok=True)
+          settings=data/'settings.ini'
+          paints=root/'iRacing/paint';paints.mkdir(parents=True)
+          sentinel=paints/'sentinel.tga';sentinel.write_bytes(b'KEEP PAINT')
+          settings.write_text('[App]\nCustomerID=111111\nSeconds=0.5\nRoot='+str(paints)+'\n[Appearance]\nTheme=2\nLanguage=en\n[Updates]\nAutomatic=0\n[Document.Test]\nVehicle=trucks fordf150\n',encoding='utf-16')
+          def run_setup(*args,expected=0):
+              result=subprocess.run([str(setup),*args],timeout=90)
+              assert result.returncode==expected,(result.returncode,expected)
+          before=settings.read_bytes()
+          run_setup('/S','/ID=0','/PLUGINS=none',expected=13)
+          assert settings.read_bytes()==before
+          subprocess.run(['gh','release','download','v0.5.18-beta','--repo',os.environ['GITHUB_REPOSITORY'],'--pattern','PaintSync-Setup-0.5.18-Beta.exe','--dir',str(root)],check=True)
+          old_setup=root/'PaintSync-Setup-0.5.18-Beta.exe'
+          assert hashlib.sha256(old_setup.read_bytes()).hexdigest()=='1e95287667d657489531b0d37f7682b6f6f63166f4cad0e676c188afd1ee9dad'
+          subprocess.run([str(old_setup),'/S','/ID=123456','/PLUGINS=none'],check=True,timeout=90)
+          assert (install/'PaintSync.exe').exists()
+          def run_gui_setup():
+              gui=ctypes.WinDLL('user32',use_last_error=True)
+              gdi=ctypes.WinDLL('gdi32',use_last_error=True)
+              cb=ctypes.WINFUNCTYPE(wintypes.BOOL,wintypes.HWND,wintypes.LPARAM)
+              gui.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+              gui.GetDlgItem.argtypes=[wintypes.HWND,ctypes.c_int];gui.GetDlgItem.restype=wintypes.HWND
+              gui.SendMessageW.argtypes=[wintypes.HWND,wintypes.UINT,ctypes.c_size_t,ctypes.c_ssize_t];gui.SendMessageW.restype=ctypes.c_ssize_t
+              gui.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
+              gui.IsWindowVisible.argtypes=[wintypes.HWND]
+              gdi.GetObjectW.argtypes=[wintypes.HANDLE,ctypes.c_int,ctypes.c_void_p]
+              process=subprocess.Popen([str(setup),'/LANG=en','/ID=123456','/PLUGINS=none'])
+              try:
+                  def windows():
+                      found=[]
+                      @cb
+                      def visit(hwnd,param):
+                          pid=wintypes.DWORD();gui.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+                          if pid.value==process.pid and gui.IsWindowVisible(hwnd):found.append(hwnd)
+                          return True
+                      gui.EnumWindows(visit,0)
+                      return found
+                  def wait_text(expected):
+                      for _ in range(300):
+                          assert process.poll() is None,'Setup exited early'
+                          matches=[]
+                          for hwnd in windows():
+                              @cb
+                              def child(handle,param):
+                                  text=ctypes.create_unicode_buffer(1024);gui.GetWindowTextW(handle,text,1024)
+                                  if text.value==expected and gui.IsWindowVisible(handle):matches.append((hwnd,handle))
+                                  return True
+                              gui.EnumChildWindows(hwnd,child,0)
+                          if matches:return matches[0]
+                          time.sleep(.1)
+                      raise AssertionError('Missing installer screen: '+expected)
+                  hwnd,title=wait_text('Welcome to PaintSync')
+                  font=gui.SendMessageW(title,0x31,0,0);lf=ctypes.create_string_buffer(92)
+                  assert gdi.GetObjectW(font,92,lf)==92 and lf.raw[26]==5,'ClearType heading missing'
+                  assert abs(struct.unpack_from('<i',lf.raw)[0])>=24,'Heading too small'
+                  def next_page():gui.SendMessageW(gui.GetDlgItem(hwnd,1),0xF5,0,0)
+                  next_page();wait_text('1 / Your iRacing ID')
+                  next_page();wait_text('2 / Connect your editors')
+                  next_page();wait_text('Ready for your next paint')
+                  options={}
+                  @cb
+                  def read_option(handle,param):
+                      label=ctypes.create_unicode_buffer(256);gui.GetWindowTextW(handle,label,256)
+                      if label.value in ('Open PaintSync','Read setup instructions'):options[label.value]=handle
+                      return True
+                  gui.EnumChildWindows(hwnd,read_option,0)
+                  assert len(options)==2
+                  for handle in options.values():
+                      initial=gui.SendMessageW(handle,0xF0,0,0)
+                      gui.SendMessageW(handle,0xF5,0,0)
+                      assert gui.SendMessageW(handle,0xF0,0,0)==1-initial,'Checkbox interaction broken'
+                      if gui.SendMessageW(handle,0xF0,0,0):gui.SendMessageW(handle,0xF5,0,0)
+                  next_page();assert process.wait(timeout=20)==0
+                  print('PASS: real installer welcome, ClearType font, ID, editors, install, finish, and checkbox interaction.')
+              finally:
+                  if process.poll() is None:process.kill()
+          run_gui_setup()
+          assert (install/'PaintSync.exe').exists() and (install/'WinSparkle.dll').exists()
+          for value in ['CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150']:
+              assert value in settings.read_text(encoding='utf-16'),value
+          exe=(install/'PaintSync.exe').read_bytes()
+          fixed=struct.unpack_from('<13I',exe,exe.index(struct.pack('<I',0xfeef04bd)))
+          assert fixed[2:6]==(65536,65536,65536,65536) and fixed[7]==0
+          assert '1.0.1'.encode('utf-16le') in exe
+          u=ctypes.WinDLL('user32',use_last_error=True)
+          u.GetDlgItem.argtypes=[wintypes.HWND,ctypes.c_int];u.GetDlgItem.restype=wintypes.HWND
+          u.SendMessageW.argtypes=[wintypes.HWND,wintypes.UINT,ctypes.c_size_t,ctypes.c_ssize_t];u.SendMessageW.restype=ctypes.c_ssize_t
+          u.IsWindowEnabled.argtypes=[wintypes.HWND]
+          u.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+          callback=ctypes.WINFUNCTYPE(wintypes.BOOL,wintypes.HWND,wintypes.LPARAM)
+          def launch_check(close_panel):
+              process=subprocess.Popen([str(install/'PaintSync.exe')])
+              try:
+                  found=[]
+                  @callback
+                  def visit(hwnd,param):
+                      pid=wintypes.DWORD()
+                      u.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+                      if pid.value==process.pid and u.GetDlgItem(hwnd,600): found.append(hwnd)
+                      return True
+                  for _ in range(80):
+                      assert process.poll() is None,'App exited before activation'
+                      u.EnumWindows(visit,0)
+                      if found:break
+                      time.sleep(.25)
+                  assert found,'Activation page not found'
+                  hwnd=found[0];panel=u.GetDlgItem(hwnd,600)
+                  if close_panel:
+                      u.SendMessageW(panel,0x111,2,0)
+                      save_rect=wintypes.RECT();start_rect=wintypes.RECT()
+                      u.GetWindowRect.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.RECT)]
+                      assert u.GetWindowRect(u.GetDlgItem(hwnd,12),ctypes.byref(save_rect))
+                      assert u.GetWindowRect(u.GetDlgItem(hwnd,10),ctypes.byref(start_rect))
+                      assert save_rect.right<start_rect.left and save_rect.top==start_rect.top
+                      texts=[]
+                      u.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
+                      @callback
+                      def read_child(child,param):
+                          text=ctypes.create_unicode_buffer(512)
+                          u.GetWindowTextW(child,text,512)
+                          if text.value:texts.append(text.value)
+                          return True
+                      u.EnumChildWindows(hwnd,read_child,0)
+                      assert 'Save Settings before hitting Start autosave.' in texts
+                      assert '1.0.1' in texts
+                      for control in (10,11,31,15):
+                          handle=u.GetDlgItem(hwnd,control)
+                          assert handle and not u.IsWindowEnabled(handle),'Unlicensed export control enabled'
+                  u.SendMessageW(hwnd,0x10,0,0)
+                  assert process.wait(timeout=10)==0
+              finally:
+                  if process.poll() is None:process.kill()
+          launch_check(True)
+          license_file=data/'license.key';license_file.write_text('K0ODIXNG',encoding='ascii')
+          launch_check(False)
+          license_before=license_file.read_bytes()
+          run_setup('/S','/UPDATE','/PLUGINS=none')
+          assert license_file.read_bytes()==license_before
+          for value in ['CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150']:
+              assert value in settings.read_text(encoding='utf-16')
+          with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync') as key:
+              assert winreg.QueryValueEx(key,'DisplayVersion')[0]=='1.0.1'
+          subprocess.run([str(install/'Uninstall.exe'),'/S'],check=True,timeout=60)
+          for _ in range(40):
+              if not (install/'PaintSync.exe').exists():break
+              time.sleep(.25)
+          assert not (install/'PaintSync.exe').exists()
+          assert settings.exists() and license_file.read_bytes()==license_before and sentinel.read_bytes()==b'KEEP PAINT'
+          print('PASS: upgrade from 0.5.18, stable metadata, Save/Start ordering and reminder, ID validation, activation page, locked exports, invalid saved license, normal close, upgrade persistence and uninstall preservation.')
