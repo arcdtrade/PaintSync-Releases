@@ -1,4 +1,4 @@
-name: Verify PaintSync 1.0.6 installer
+name: Verify PaintSync 1.0.7 installer
 on:
   push:
     branches: [main]
@@ -25,12 +25,12 @@ jobs:
           from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
           repo=os.environ['GITHUB_REPOSITORY']
           releases=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases?per_page=100']))
-          matches=[release for release in releases if release['name']=='PaintSync 1.0.6']
-          assert len(matches)==1, 'Expected exactly one 1.0.6 release'
+          matches=[release for release in releases if release['name']=='PaintSync 1.0.7']
+          assert len(matches)==1, 'Expected exactly one 1.0.7 release'
           release=matches[0]
-          assert release['tag_name']=='v1.0.6' and not release['draft']
-          expected={'PaintSync-Setup-1.0.6.exe': '947bf226085a243ef23c471a52b2c71dcdef11c3b5034d856ad776e595e14f32', 'appcast.xml': 'd74945c194ae29c848d4763105a5a0d23a46416ae7fefaf8a342dae881a27715', 'SHA256SUMS.txt': '0c789de9d0739c107f26713e7f26200e40c0d865c3b2d8e5456334e266664884', 'Read-Me.txt': '64f4f4202390758ab7a42a5416a15d1363682521f6a1b5db1ba2d1a8356f8a5a'}
-          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-106'
+          assert release['tag_name']=='v1.0.7' and not release['draft']
+          expected={'PaintSync-Setup-1.0.7.exe': '15c0fb5a16b0b10ec5cc061711c69ba0bf53871731154cada5ae6dcac559e4a2', 'appcast.xml': '17ed07f6665a571aa19d5456f956a5a89a0aab7d925d7f81e5334b80c2ee5dc4', 'SHA256SUMS.txt': '2c7ce7dc66d4b03cde084766a7d02263651bd3679df3ae4bd47e22cefaa3bab1', 'Read-Me.txt': '2942dccae647ba177c6e41686bb6d3fc5fc42713bf0d6744b7726d934ea268b7'}
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-107'
           root.mkdir()
           assets={a['name']:a for a in release['assets']}
           for name,digest in expected.items():
@@ -41,10 +41,10 @@ jobs:
           ns='{http://www.andymatuschak.org/xml-namespaces/sparkle}'
           item=ET.fromstring((root/'appcast.xml').read_bytes()).find('channel/item')
           enclosure=item.find('enclosure')
-          assert item.find(ns+'version').text=='1.0.6'
-          assert enclosure.attrib['url']==f'https://github.com/{repo}/releases/download/v1.0.6/PaintSync-Setup-1.0.6.exe'
+          assert item.find(ns+'version').text=='1.0.7'
+          assert enclosure.attrib['url']==f'https://github.com/{repo}/releases/download/v1.0.7/PaintSync-Setup-1.0.7.exe'
           assert enclosure.attrib[ns+'installerArguments']=='/UPDATE'
-          raw=(root/'PaintSync-Setup-1.0.6.exe').read_bytes()
+          raw=(root/'PaintSync-Setup-1.0.7.exe').read_bytes()
           assert int(enclosure.attrib['length'])==len(raw)
           Ed25519PublicKey.from_public_bytes(base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')).verify(base64.b64decode(enclosure.attrib[ns+'edSignature']),raw)
           print('PASS: exact approved installer, feed, checksum, version and Ed25519 update signature.')
@@ -53,8 +53,8 @@ jobs:
         run: |
           import ctypes, hashlib, json, os, pathlib, struct, subprocess, time, winreg
           from ctypes import wintypes
-          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-106'
-          setup=root/'PaintSync-Setup-1.0.6.exe'
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-107'
+          setup=root/'PaintSync-Setup-1.0.7.exe'
           install=pathlib.Path(os.environ['LOCALAPPDATA'])/'Programs/PaintSync'
           data=pathlib.Path(os.environ['USERPROFILE'])/'AppData/Local/PaintRelay'
           data.mkdir(parents=True,exist_ok=True)
@@ -68,9 +68,9 @@ jobs:
           before=settings.read_bytes()
           run_setup('/S','/ID=0','/PLUGINS=none',expected=13)
           assert settings.read_bytes()==before
-          subprocess.run(['gh','release','download','v1.0.5','--repo',os.environ['GITHUB_REPOSITORY'],'--pattern','PaintSync-Setup-1.0.5.exe','--dir',str(root)],check=True)
-          old_setup=root/'PaintSync-Setup-1.0.5.exe'
-          assert hashlib.sha256(old_setup.read_bytes()).hexdigest()=='9fb88b15a721608958284144ee223ee7acb13254e48436d1ac1cfe8d8b8fce0b'
+          subprocess.run(['gh','release','download','v1.0.6','--repo',os.environ['GITHUB_REPOSITORY'],'--pattern','PaintSync-Setup-1.0.6.exe','--dir',str(root)],check=True)
+          old_setup=root/'PaintSync-Setup-1.0.6.exe'
+          assert hashlib.sha256(old_setup.read_bytes()).hexdigest()=='947bf226085a243ef23c471a52b2c71dcdef11c3b5034d856ad776e595e14f32'
           subprocess.run([str(old_setup),'/S','/ID=123456','/PLUGINS=none'],check=True,timeout=90)
           assert (install/'PaintSync.exe').exists()
           def run_gui_setup():
@@ -134,7 +134,7 @@ jobs:
               finally:
                   if process.poll() is None:process.kill()
           run_gui_setup()
-          installed_files={'PaintSync.exe': 'c838fce45e4c6f604090741c22f584fefff8cdbe43a15a6211330c2f49958210', 'Plugins/PaintSync-Desktop-Link-2.2.7-Beta.ccx': '8a73c4d1c16b2da6355607943a44e003009468baf1a4e68d30cb572fb60bbed1', 'Plugins/Illustrator-Link/extension/engine.js': '1903758b52ce24fd4cddbe48a0be4d5f11dd93518e080646ff350b3d57b4ed19', 'Plugins/GIMP-Link/paintsync-link/engine.py': 'c7ed7750c3378c789244e60e5178ef9e808e2e3968a8619cf9cf741186dc7fb9'}
+          installed_files={'PaintSync.exe': '96c8f7b821789a3fdba874702bebe1dd1540a0989559db2873c235acad27c854', 'Plugins/PaintSync-Desktop-Link-2.2.7-Beta.ccx': '8a73c4d1c16b2da6355607943a44e003009468baf1a4e68d30cb572fb60bbed1', 'Plugins/Illustrator-Link/extension/engine.js': '1903758b52ce24fd4cddbe48a0be4d5f11dd93518e080646ff350b3d57b4ed19', 'Plugins/GIMP-Link/paintsync-link/engine.py': 'c7ed7750c3378c789244e60e5178ef9e808e2e3968a8619cf9cf741186dc7fb9'}
           for name,digest in installed_files.items():
               assert hashlib.sha256((install/name).read_bytes()).hexdigest()==digest,name
           assert (install/'Read-Me.txt').read_bytes()==(root/'Read-Me.txt').read_bytes()
@@ -172,8 +172,8 @@ jobs:
               assert value in settings.read_text(encoding='utf-16'),value
           exe=(install/'PaintSync.exe').read_bytes()
           fixed=struct.unpack_from('<13I',exe,exe.index(struct.pack('<I',0xfeef04bd)))
-          assert fixed[2:6]==(65536,393216,65536,393216) and fixed[7]==0
-          assert '1.0.6'.encode('utf-16le') in exe
+          assert fixed[2:6]==(65536,458752,65536,458752) and fixed[7]==0
+          assert '1.0.7'.encode('utf-16le') in exe
           u=ctypes.WinDLL('user32',use_last_error=True)
           u.GetDlgItem.argtypes=[wintypes.HWND,ctypes.c_int];u.GetDlgItem.restype=wintypes.HWND
           u.SendMessageW.argtypes=[wintypes.HWND,wintypes.UINT,ctypes.c_size_t,ctypes.c_ssize_t];u.SendMessageW.restype=ctypes.c_ssize_t
@@ -214,7 +214,7 @@ jobs:
                           return True
                       u.EnumChildWindows(hwnd,read_child,0)
                       assert 'Save Settings before hitting Start autosave.' in texts
-                      assert '1.0.6' in texts and 'Ready to Race?' in texts
+                      assert '1.0.7' in texts and 'Ready to Race?' in texts
                       output_windows=[]
                       u.GetClassNameW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
                       @callback
@@ -251,7 +251,7 @@ jobs:
           for value in ['CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150']:
               assert value in settings.read_text(encoding='utf-16')
           with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync') as key:
-              assert winreg.QueryValueEx(key,'DisplayVersion')[0]=='1.0.6'
+              assert winreg.QueryValueEx(key,'DisplayVersion')[0]=='1.0.7'
           subprocess.run([str(install/'Uninstall.exe'),'/S'],check=True,timeout=60)
           removed=[install/'PaintSync.exe',install/'Read-Me.txt',start_menu/'User guide.lnk',install/'Plugins/SavedImage-Link/PaintSyncImageLink.exe']
           for _ in range(240):
@@ -261,7 +261,7 @@ jobs:
           assert not (install/'PaintSync.exe').exists()
           assert not (install/'Read-Me.txt').exists() and not (start_menu/'User guide.lnk').exists()
           assert settings.exists() and license_file.read_bytes()==license_before and sentinel.read_bytes()==b'KEEP PAINT'
-          print('PASS: upgrade from 1.0.5, stable metadata, compact Paint heading, Settings/Folders, export pop-out, Save/Start ordering and reminder, ID validation, activation page, locked exports, invalid saved license, normal close, upgrade persistence and uninstall preservation.')
+          print('PASS: upgrade from 1.0.6, stable metadata, compact Paint heading, Settings/Folders, export pop-out, Save/Start ordering and reminder, ID validation, activation page, locked exports, invalid saved license, normal close, upgrade persistence and uninstall preservation.')
 
 
 
