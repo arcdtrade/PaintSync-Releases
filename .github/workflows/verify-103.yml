@@ -29,7 +29,7 @@ jobs:
           assert len(matches)==1, 'Expected exactly one 1.0.11 release'
           release=matches[0]
           assert release['tag_name']=='v1.0.11' and not release['draft']
-          expected={'PaintSync-Setup-1.0.11.exe': 'ff567e8ee07ec4f2f5842f7923130bd597efa3cf3e42b8d43cc41ed0dda35013', 'appcast.xml': '0dadfac45d6d09d43359e5bb027cb67095de3af37a775fb4418fb33cbf6f1ef7', 'SHA256SUMS.txt': '7c5bd291c62f12f557110b96e3f4ec0e32605a98c7c45d4ed91db60c499b65eb', 'Read-Me.txt': '6c75bf9be2b6eec244828da7515ceecd39412cfaa241f0d446169eb992686853'}
+          expected={'PaintSync-Setup-1.0.11.exe': 'ff567e8ee07ec4f2f5842f7923130bd597efa3cf3e42b8d43cc41ed0dda35013', 'appcast.xml': 'b87d556ff72a4ee7584a60af2bf843404f9b44712e27f7de345252d8b9db1f5f', 'SHA256SUMS.txt': '7c5bd291c62f12f557110b96e3f4ec0e32605a98c7c45d4ed91db60c499b65eb', 'Read-Me.txt': '6c75bf9be2b6eec244828da7515ceecd39412cfaa241f0d446169eb992686853'}
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1011'
           root.mkdir()
           assets={a['name']:a for a in release['assets']}
