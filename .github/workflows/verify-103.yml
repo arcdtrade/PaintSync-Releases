@@ -117,6 +117,9 @@ jobs:
                   while time.monotonic() < deadline:
                       assert process.poll() is None, ('Setup exited', process.returncode, label)
                       for hwnd, handle, text in controls(process):
+                          if 'Illustrator plugin installation did not complete' in text:
+                              result = subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(install/'Plugins/Illustrator-Link/Install.ps1'),'-FromSetup'],capture_output=True,text=True,timeout=35)
+                              raise AssertionError(('Illustrator installer diagnostic',result.returncode,result.stdout,result.stderr))
                           if label in text:
                               return hwnd, handle, text
                       time.sleep(.1)
