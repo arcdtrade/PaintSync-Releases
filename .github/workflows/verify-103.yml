@@ -563,7 +563,7 @@ jobs:
           def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
           release=json.loads(gh('api',f'repos/{repo}/releases/tags/{tag}'))
           assert release['tag_name']==tag and not release['draft']
-          assert release['prerelease'], 'Expected the verified staging release'
+          assert not release['prerelease'], 'Expected the Windows-verified promoted release'
           assets={a['name']:a for a in release['assets']}
           installer=f'PaintSync-Setup-{version}.exe'
           for name,expected in [(installer,expected_installer),('appcast.xml',expected_feed)]:
@@ -584,36 +584,22 @@ jobs:
           # Verify public installer bytes before changing stable metadata or active feed.
           assert hashlib.sha256(public(enclosure.get('url'))).hexdigest()==expected_installer
           latest=json.loads(gh('api',f'repos/{repo}/releases/latest'))
-          assert latest['tag_name']=='v1.0.17', 'Stable release changed concurrently; inspect before publishing'
+          assert latest['tag_name']==tag and not latest['prerelease']
           channel=json.loads(gh('api',f'repos/{repo}/releases/tags/beta-channel'))
           active=next(a for a in channel['assets'] if a['name']=='appcast.xml')
-          assert active['digest']=='sha256:'+old_feed_digest,'Active channel changed concurrently'
-          old=public(f'https://github.com/{repo}/releases/download/beta-channel/appcast.xml')
-          assert hashlib.sha256(old).hexdigest()==old_feed_digest
-          backup=root/'appcast-1.0.17.xml';backup.write_bytes(old)
-          archived=next((a for a in channel['assets'] if a['name']==backup.name),None)
-          if archived:assert archived['digest']=='sha256:'+old_feed_digest
-          else:gh('release','upload','beta-channel',backup,'--repo',repo)
-          gh('release','edit',tag,'--repo',repo,'--prerelease=false','--latest=true')
-          stable=json.loads(gh('api',f'repos/{repo}/releases/latest'))
-          assert stable['tag_name']==tag and not stable['prerelease'] and not stable['draft']
-          try:
-           gh('release','upload','beta-channel',root/'appcast.xml','--repo',repo,'--clobber')
-           for attempt in range(6):
-            try:
-             live=public(f'https://github.com/{repo}/releases/download/beta-channel/appcast.xml')
-             if live==(root/'appcast.xml').read_bytes():break
-            except Exception:
-             if attempt==5:raise
-            time.sleep(2)
-           else:raise AssertionError('Public update feed differs from verified signed feed')
-          except Exception:
-           # If upload failed after removing the former active asset, restore its bytes.
-           current=json.loads(gh('api',f'repos/{repo}/releases/tags/beta-channel'))
-           if not any(a['name']=='appcast.xml' for a in current['assets']):
-            (root/'appcast.xml').write_bytes(old)
-            gh('release','upload','beta-channel',root/'appcast.xml','--repo',repo)
-           raise
+          assert active['digest']=='sha256:'+expected_feed
+          archived=next(a for a in channel['assets'] if a['name']=='appcast-1.0.17.xml')
+          assert archived['digest']=='sha256:'+old_feed_digest
+          # A replaced GitHub release asset may retain its old redirect briefly.
+          # Verify the exact canonical URL; do not bypass the updater's real URL.
+          for attempt in range(60):
+           try:
+            live=public(f'https://github.com/{repo}/releases/download/beta-channel/appcast.xml')
+            if live==(root/'appcast.xml').read_bytes():break
+           except Exception:
+            if attempt==59:raise
+           time.sleep(5)
+          else:raise AssertionError('Canonical public updater feed still differs')
           channel_notes=root/'channel-notes.txt'
           channel_notes.write_text('The active Windows feed offers [PaintSync '+version+'](https://github.com/'+repo+'/releases/tag/'+tag+').\n\nPolar activation supports monthly, yearly and lifetime licenses with one PC per license. The complete Image Link window runtime and Photoshop upgrade cleanup are included.\n\nIn PaintSync, open Settings > General > Check for updates. Save artwork and stop autosave before installing.\n\n[Windows installation, upgrade and panel startup checks passed](https://github.com/'+repo+'/actions/runs/'+os.environ['GITHUB_RUN_ID']+').\n',encoding='utf-8')
           gh('release','edit','beta-channel','--repo',repo,'--notes-file',channel_notes)
