@@ -350,7 +350,7 @@ jobs:
               assert value in settings.read_text(encoding='utf-16'),value
           exe=(install/'PaintSync.exe').read_bytes()
           fixed=struct.unpack_from('<13I',exe,exe.index(struct.pack('<I',0xfeef04bd)))
-          assert fixed[2:6]==(65536,1310720,65536,1310720) and fixed[7]==0
+          assert fixed[2:6]==(65536,1376256,65536,1376256) and fixed[7]==0
           assert '1.0.21'.encode('utf-16le') in exe
           u=ctypes.WinDLL('user32',use_last_error=True)
           u.GetDlgItem.argtypes=[wintypes.HWND,ctypes.c_int];u.GetDlgItem.restype=wintypes.HWND
