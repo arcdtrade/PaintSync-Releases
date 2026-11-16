@@ -669,12 +669,13 @@ jobs:
           print('PASS locked-folder failure leaves previous plugins intact, removes staged files, and allows a clean retry.')
           
           # A later compatible plugin release survives older full-app packaging.
-          newer=original_metadata.decode('ascii').replace('Version=1.0.0','Version=1.1.0',1)
+          newer=original_metadata.decode('ascii').replace('\r\n','\n').replace('Version=1.0.0','Version=1.1.0',1)
           metadata.write_text(newer,encoding='ascii');marker=install/'Plugins/newer-plugin.txt';marker.write_text('KEEP NEWER',encoding='ascii')
+          newer_bytes=metadata.read_bytes()
           setup(bundle,'/PLUGINS=none',expected=19)
-          assert marker.read_text()=='KEEP NEWER' and metadata.read_text()==newer
+          assert marker.read_text()=='KEEP NEWER' and metadata.read_bytes()==newer_bytes
           setup(full,'/UPDATE','/PLUGINS=none')
-          assert marker.read_text()=='KEEP NEWER' and metadata.read_text()==newer
+          assert marker.read_text()=='KEEP NEWER' and metadata.read_bytes()==newer_bytes
           assert target.read_bytes()==original
           print('PASS bundle downgrade refused; newer compatible plugins survive a full-app update.')
           
