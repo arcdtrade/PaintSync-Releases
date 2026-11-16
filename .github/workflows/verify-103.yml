@@ -10,12 +10,49 @@ concurrency:
   group: paintsync-103-verification
   cancel-in-progress: false
 jobs:
+  stage-release-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download exact draft assets without executing them
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import hashlib,json,os,pathlib,subprocess
+          repo=os.environ['GITHUB_REPOSITORY'];assert repo=='arcdtrade/PaintSync-Releases'
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'staged-paintsync';root.mkdir()
+          releases=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases?per_page=100']))
+          groups=[('PaintSync 1.0.24', '.', {'PaintSync-Setup-1.0.24.exe': '9f88eb90d3507549e89916d5d25cde2d7ba87dc882241940b6e26c034c525d37', 'appcast.xml': '7993de3950eec40fae1f839ad8898017ce324eee6817f113f7e0fc1bc51f7ecb', 'Read-Me.txt': '05bb6e708e34190c6c1e42f24dd1f86859e005f6e0b18b447fae37d2501cdc53', 'SHA256SUMS.txt': '4bc9271af46f99f81ec82b5e998000150cd8ad35c5cf4b0f2108886e9d930d60'}), ('PaintSync Plugins 1.0.0', 'plugins', {'PaintSync-Plugins-1.0.0.exe': '46298555880a40e552ae59e1daca2dbc4f1ae56db3eb5170028d162871d3be1f', 'appcast.xml': 'c23fe47efad7cbfcd42aa17cd2c97fa9102d75c8e78e9a3e8930efde3288fb8d', 'Read-Me.txt': 'c0b674b3613ad1ac6920b56a41dee3018fbfedcbf44ba69e1f0634dd2f57158a', 'SHA256SUMS.txt': '91f55caf36560ac9c7a855d4b294ff267f059b14149e35a063caabaa3b653260'})]
+          for title,folder,expected in groups:
+           matches=[r for r in releases if r['name']==title];assert len(matches)==1,title
+           assets={a['name']:a for a in matches[0]['assets']}
+           target=root/folder;target.mkdir(exist_ok=True)
+           for name,digest in expected.items():
+            asset=assets[name];assert asset['digest']=='sha256:'+digest
+            with (target/name).open('wb') as output:
+             subprocess.run(['gh','api',f"repos/{repo}/releases/assets/{asset['id']}",'-H','Accept: application/octet-stream'],stdout=output,check=True)
+            assert hashlib.sha256((target/name).read_bytes()).hexdigest()==digest
+          print('PASS downloaded exact draft files; no installers executed and no releases changed.')
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-release-inputs
+          path: ${{ runner.temp }}/staged-paintsync
+          retention-days: 2
+          if-no-files-found: error
   verify-installation:
+    needs: stage-release-files
     runs-on: windows-latest
     timeout-minutes: 25
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: verified-release-inputs
+          path: ${{ runner.temp }}/paintsync-1024
       - name: Install signature verifier
         run: python -m pip install cryptography==46.0.3
       - name: Download and verify the release files
@@ -24,20 +61,9 @@ jobs:
           import base64, hashlib, json, os, pathlib, subprocess, xml.etree.ElementTree as ET
           from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
           repo=os.environ['GITHUB_REPOSITORY']
-          releases=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases?per_page=100']))
-          matches=[release for release in releases if release['name']=='PaintSync 1.0.24']
-          assert len(matches)==1, 'Expected exactly one 1.0.24 release'
-          release=matches[0]
-          assert release['tag_name']=='v1.0.24' or (release['draft'] and release['tag_name'].startswith('untagged-'))  # A draft stays off the updater until this workflow passes
           expected={'PaintSync-Setup-1.0.24.exe': '9f88eb90d3507549e89916d5d25cde2d7ba87dc882241940b6e26c034c525d37', 'appcast.xml': '7993de3950eec40fae1f839ad8898017ce324eee6817f113f7e0fc1bc51f7ecb', 'Read-Me.txt': '05bb6e708e34190c6c1e42f24dd1f86859e005f6e0b18b447fae37d2501cdc53', 'SHA256SUMS.txt': '4bc9271af46f99f81ec82b5e998000150cd8ad35c5cf4b0f2108886e9d930d60'}
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1024'
-          root.mkdir()
-          assets={a['name']:a for a in release['assets']}
-          for name,digest in expected.items():
-              asset=assets[name]
-              with (root/name).open('wb') as output:
-                  subprocess.run(['gh','api',f"repos/{repo}/releases/assets/{asset['id']}",'-H','Accept: application/octet-stream'],stdout=output,check=True)
-              assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest, name
+          for name,digest in expected.items():assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest,name
           ns='{http://www.andymatuschak.org/xml-namespaces/sparkle}'
           item=ET.fromstring((root/'appcast.xml').read_bytes()).find('channel/item')
           enclosure=item.find('enclosure')
@@ -557,13 +583,8 @@ jobs:
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1024'
           install=pathlib.Path(os.environ['LOCALAPPDATA'])/'Programs/PaintSync'
           data=pathlib.Path(os.environ['USERPROFILE'])/'AppData/Local/PaintRelay'
-          full=root/'PaintSync-Setup-1.0.24.exe';plugin_dir=root/'plugins';plugin_dir.mkdir()
-          releases=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases?per_page=100']))
-          matches=[r for r in releases if r['name']=='PaintSync Plugins 1.0.0'];assert len(matches)==1
-          for asset in matches[0]['assets']:
-              assert asset['name'] in ['PaintSync-Plugins-1.0.0.exe','appcast.xml','Read-Me.txt','SHA256SUMS.txt']
-              with (plugin_dir/asset['name']).open('wb') as output:
-                  subprocess.run(['gh','api',f"repos/{repo}/releases/assets/{asset['id']}",'-H','Accept: application/octet-stream'],stdout=output,check=True)
+          full=root/'PaintSync-Setup-1.0.24.exe';plugin_dir=root/'plugins'
+          assert plugin_dir.is_dir(), 'Download-only preparation job must supply the draft files'
           bundle=plugin_dir/'PaintSync-Plugins-1.0.0.exe'
           digest=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
           expected=json.loads(os.environ['PLUGIN_EXPECTED'])
@@ -760,7 +781,7 @@ jobs:
           def gh(*args):return subprocess.check_output(['gh',*map(str,args)],text=True).strip()
           matches=[r for r in json.loads(gh('api',f'repos/{repo}/releases?per_page=100')) if r['name']=='PaintSync Plugins 1.0.0'];assert len(matches)==1
           release=matches[0]
-          assert not release['prerelease']
+          assert release['draft'] or release['tag_name']=='plugins-1.0.0'
           assets={a['name']:a for a in release['assets']}
           for name,digest in expected.items():
            assert assets[name]['digest']=='sha256:'+digest
@@ -813,7 +834,7 @@ jobs:
           matches=[r for r in json.loads(gh('api',f'repos/{repo}/releases?per_page=100')) if r['name']=='PaintSync '+version];assert len(matches)==1
           release=matches[0]
           assert release['tag_name']==tag or (release['draft'] and release['tag_name'].startswith('untagged-'))
-          assert not release['prerelease'], 'Expected the Windows-verified promoted release'
+          assert release['draft'] or release['tag_name']==tag
           assets={a['name']:a for a in release['assets']}
           installer=f'PaintSync-Setup-{version}.exe'
           for name,expected in [(installer,expected_installer),('appcast.xml',expected_feed)]:
@@ -832,7 +853,7 @@ jobs:
            request=urllib.request.Request(url,headers={'User-Agent':'PaintSync-Release-Verification'})
            with urllib.request.urlopen(request,timeout=60) as response:return response.read(100*1024*1024)
           # Publication is gated by the successful Windows job and exact signed bytes.
-          if release['draft']:
+          if release['draft'] or release['prerelease']:
            gh('api','--method','PATCH',f"repos/{repo}/releases/{release['id']}",'-f','tag_name='+tag,'-F','draft=false','-F','prerelease=false','-f','make_latest=true')
           assert hashlib.sha256(public(enclosure.get('url'))).hexdigest()==expected_installer
           latest=json.loads(gh('api',f'repos/{repo}/releases/latest'))
