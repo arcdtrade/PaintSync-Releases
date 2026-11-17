@@ -1,4 +1,4 @@
-name: Verify PaintSync 1.0.25 installer
+name: Verify PaintSync 1.0.26 installer
 on:
   push:
     branches: [main]
@@ -25,7 +25,7 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY'];assert repo=='arcdtrade/PaintSync-Releases'
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'staged-paintsync';root.mkdir()
           releases=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases?per_page=100']))
-          groups=[('PaintSync 1.0.25', '.', {'PaintSync-Setup-1.0.25.exe': '168256f8fb8986d6fa5b1beea9de2d2b5e3ecfe52d5d0ccc1eb5532f511edee0', 'appcast.xml': '4a7024ba057979dc894302901417eea4d18c46df1a22daff985ea24dbbd2d6cd', 'Read-Me.txt': 'b830f34ee22ffc654792fbb8c5316ac487b59ab79d2ae8201a921d34326871d2', 'SHA256SUMS.txt': 'f81bd3adfd1264f8f8877d5120b7caf59bc8ee531cbb87a88fff910998abea9d'}), ('PaintSync Plugins 1.1.0', 'plugins', {'PaintSync-Plugins-1.1.0.exe': '7fb78a6eba8101db6e38d63894fb443ce3d56b859406b892e58b8c37f27a6b56', 'appcast.xml': '34fa05bf3515547a699371fd08fb25106efd1892aef95bc417428c15d4793866', 'Read-Me.txt': '4d5c17193a12932b4e6183ce4fb3504996b3ab47604758406f148c1728cbbba3', 'SHA256SUMS.txt': '7dabc0c982177d671c55c2d88d36b8093159a509e59c512fcc97ce21b4f47880'})]
+          groups=[('PaintSync 1.0.26', '.', {'PaintSync-Setup-1.0.26.exe': '0496a3c4fef4e6447b38aab40db12a74e947471e543b0bf78ccb5778af5a8d82', 'PaintSync-Receiver-1.0.0.zip': '694ace2c15494ef3f4c638a917f477097cfcc080e980772c0b7f9ebbe63c4bdc', 'appcast.xml': 'f7f68ee97d4d2989415e534ca8c70612e9127f83c249155a1c6f63ab8b901a65', 'Read-Me.txt': '5ccb53f5b19f84e53de8eb42165ee536e98d514fb7936d8d67c268d8b17fca5d', 'SHA256SUMS.txt': '7eec5018024b04ab7f8b09676456f757b5dd33e4109e99800680069b606f1e1e'}), ('PaintSync Plugins 1.1.0', 'plugins', {'PaintSync-Plugins-1.1.0.exe': '7fb78a6eba8101db6e38d63894fb443ce3d56b859406b892e58b8c37f27a6b56', 'appcast.xml': '34fa05bf3515547a699371fd08fb25106efd1892aef95bc417428c15d4793866', 'Read-Me.txt': '4d5c17193a12932b4e6183ce4fb3504996b3ab47604758406f148c1728cbbba3', 'SHA256SUMS.txt': '7dabc0c982177d671c55c2d88d36b8093159a509e59c512fcc97ce21b4f47880'})]
           for title,folder,expected in groups:
            matches=[r for r in releases if r['name']==title];assert len(matches)==1,title
            assets={a['name']:a for a in matches[0]['assets']}
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: verified-release-inputs
-          path: ${{ runner.temp }}/paintsync-1025
+          path: ${{ runner.temp }}/paintsync-1026
       - name: Install signature verifier
         run: python -m pip install cryptography==46.0.3
       - name: Download and verify the release files
@@ -61,16 +61,16 @@ jobs:
           import base64, hashlib, json, os, pathlib, subprocess, xml.etree.ElementTree as ET
           from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
           repo=os.environ['GITHUB_REPOSITORY']
-          expected={'PaintSync-Setup-1.0.25.exe': '168256f8fb8986d6fa5b1beea9de2d2b5e3ecfe52d5d0ccc1eb5532f511edee0', 'appcast.xml': '4a7024ba057979dc894302901417eea4d18c46df1a22daff985ea24dbbd2d6cd', 'Read-Me.txt': 'b830f34ee22ffc654792fbb8c5316ac487b59ab79d2ae8201a921d34326871d2', 'SHA256SUMS.txt': 'f81bd3adfd1264f8f8877d5120b7caf59bc8ee531cbb87a88fff910998abea9d'}
-          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1025'
+          expected={'PaintSync-Setup-1.0.26.exe': '0496a3c4fef4e6447b38aab40db12a74e947471e543b0bf78ccb5778af5a8d82', 'PaintSync-Receiver-1.0.0.zip': '694ace2c15494ef3f4c638a917f477097cfcc080e980772c0b7f9ebbe63c4bdc', 'appcast.xml': 'f7f68ee97d4d2989415e534ca8c70612e9127f83c249155a1c6f63ab8b901a65', 'Read-Me.txt': '5ccb53f5b19f84e53de8eb42165ee536e98d514fb7936d8d67c268d8b17fca5d', 'SHA256SUMS.txt': '7eec5018024b04ab7f8b09676456f757b5dd33e4109e99800680069b606f1e1e'}
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1026'
           for name,digest in expected.items():assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest,name
           ns='{http://www.andymatuschak.org/xml-namespaces/sparkle}'
           item=ET.fromstring((root/'appcast.xml').read_bytes()).find('channel/item')
           enclosure=item.find('enclosure')
-          assert item.find(ns+'version').text=='1.0.25'
-          assert enclosure.attrib['url']==f'https://github.com/{repo}/releases/download/v1.0.25/PaintSync-Setup-1.0.25.exe'
+          assert item.find(ns+'version').text=='1.0.26'
+          assert enclosure.attrib['url']==f'https://github.com/{repo}/releases/download/v1.0.26/PaintSync-Setup-1.0.26.exe'
           assert enclosure.attrib[ns+'installerArguments']=='/UPDATE'
-          raw=(root/'PaintSync-Setup-1.0.25.exe').read_bytes()
+          raw=(root/'PaintSync-Setup-1.0.26.exe').read_bytes()
           assert int(enclosure.attrib['length'])==len(raw)
           Ed25519PublicKey.from_public_bytes(base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')).verify(base64.b64decode(enclosure.attrib[ns+'edSignature']),raw)
           print('PASS: exact approved installer, feed, checksum, version and Ed25519 update signature.')
@@ -79,8 +79,8 @@ jobs:
         run: |
           import ctypes, hashlib, json, os, pathlib, struct, subprocess, time, winreg
           from ctypes import wintypes
-          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1025'
-          setup=root/'PaintSync-Setup-1.0.25.exe'
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1026'
+          setup=root/'PaintSync-Setup-1.0.26.exe'
           install=pathlib.Path(os.environ['LOCALAPPDATA'])/'Programs/PaintSync'
           data=pathlib.Path(os.environ['USERPROFILE'])/'AppData/Local/PaintRelay'
           data.mkdir(parents=True,exist_ok=True)
@@ -129,8 +129,8 @@ jobs:
                           @visit_type
                           def child(handle, _):
                               if gui.IsWindowVisible(handle):
-                                  text = ctypes.create_unicode_buffer(1025)
-                                  gui.GetWindowTextW(handle, text, 1025)
+                                  text = ctypes.create_unicode_buffer(1026)
+                                  gui.GetWindowTextW(handle, text, 1026)
                                   result.append((hwnd, handle, text.value))
                               return True
                           gui.EnumChildWindows(hwnd, child, 0)
@@ -250,7 +250,7 @@ jobs:
           assert hashlib.sha256(previous.read_bytes()).hexdigest()=='0ce10a7453ec3bf0951ee7e913854b1360704b23023b3edab1c9a549a1586190'
           subprocess.run([str(previous),'/S','/ID=123456','/PLUGINS=none'],check=True,timeout=90)
           assert (install/'Plugins/PaintSync-Desktop-Link-2.2.9-Beta.ccx').is_file()
-          # Exercise the actual 1.0.16 to 1.0.25 update and removal of its obsolete CCX.
+          # Exercise the actual 1.0.16 to 1.0.26 update and removal of its obsolete CCX.
           subprocess.run(['gh','release','download','v1.0.16','--repo',os.environ['GITHUB_REPOSITORY'],'--pattern','PaintSync-Setup-1.0.16.exe','--dir',str(root)],check=True)
           latest_prior=root/'PaintSync-Setup-1.0.16.exe'
           assert hashlib.sha256(latest_prior.read_bytes()).hexdigest()=='1662af7808d2416812bcf352e95636d47e7eb71c7b0587679bcb957f8d4623be'
@@ -278,10 +278,17 @@ jobs:
           current_stable=root/'PaintSync-Setup-1.0.22.exe'
           assert hashlib.sha256(current_stable.read_bytes()).hexdigest()=='590e21879610d4350410f3566587ca81307bc920aa921847370399e4bdc366ed'
           subprocess.run([str(current_stable),'/S','/UPDATE','/PLUGINS=none'],check=True,timeout=90)
+          subprocess.run(['gh','release','download','v1.0.25','--repo',os.environ['GITHUB_REPOSITORY'],'--pattern','PaintSync-Setup-1.0.25.exe','--dir',str(root)],check=True)
+          prior_live=root/'PaintSync-Setup-1.0.25.exe'
+          assert hashlib.sha256(prior_live.read_bytes()).hexdigest()=='168256f8fb8986d6fa5b1beea9de2d2b5e3ecfe52d5d0ccc1eb5532f511edee0'
+          subprocess.run([str(prior_live),'/S','/UPDATE','/PLUGINS=none'],check=True,timeout=90)
+          contacts=pathlib.Path(os.environ['LOCALAPPDATA'])/'PaintSyncTransfer'
+          contacts.mkdir(exist_ok=True)
+          contact_sentinel=contacts/'upgrade-preservation.txt';contact_sentinel.write_bytes(b'KEEP PRIVATE CONTACTS')
           old_settings=settings.read_bytes()
           run_setup('/S','/UPDATE','/PLUGINS=none')
           assert settings.read_bytes()==old_settings and protected.read_bytes()==retained
-          print('PASS actual 1.0.22 to 1.0.25 upgrade preserves settings and license data.')
+          print('PASS actual 1.0.22 to 1.0.26 upgrade preserves settings and license data.')
           def run_gui_setup():
               gui=ctypes.WinDLL('user32',use_last_error=True)
               gdi=ctypes.WinDLL('gdi32',use_last_error=True)
@@ -310,7 +317,7 @@ jobs:
                           for hwnd in windows():
                               @cb
                               def child(handle,param):
-                                  text=ctypes.create_unicode_buffer(1025);gui.GetWindowTextW(handle,text,1025)
+                                  text=ctypes.create_unicode_buffer(1026);gui.GetWindowTextW(handle,text,1026)
                                   if text.value==expected and gui.IsWindowVisible(handle):matches.append((hwnd,handle))
                                   return True
                               gui.EnumChildWindows(hwnd,child,0)
@@ -343,7 +350,7 @@ jobs:
               finally:
                   if process.poll() is None:process.kill()
           run_gui_setup()
-          installed_files={'PaintSync.exe': '8ebdda6f0349d657f1bbed7965d442d595d3d7135430bb3335fd10cf0ca4543f', 'Plugins/PaintSync-Desktop-Link-1.0.2.ccx': '444f23943bdba73601a6a9c1ed3bc2755f03944275fb971e9a0d85104a575b1e', 'Plugins/Illustrator-Link/extension/engine.js': '03dcfe05144eb429bb13a3e999d695ad97a1414f3fb68195f828e69e53a905af', 'Plugins/GIMP-Link/paintsync-link/engine.py': '9e3c6e9892cc41cd74effa79a451d20b1d5070ed89d1eac835b42aa014821b24', 'Plugins/Illustrator-Link/extension/entitlement.js': 'd3cf0f262e211ed809933504b2177992da5bd780f4a5dab1fcb901d8d0ea5ff6', 'Plugins/GIMP-Link/paintsync-link/entitlement.py': 'ca67b674a87be4372bce212716a9df8dcd15663ff97956e81b056ba783d5cb78', 'Plugins/Illustrator-Link/extension/CSXS/manifest.xml': '42e3e289fd32f62166c8953c917bb4c14d00ff0c91f9e73a0851b0d2cc3d6471', 'Plugins/Illustrator-Link/Install.ps1': '80baf0300999a1447f24f52a07c31d3e4bc2b4cfd41180136dfcde79abe0c60c', 'Plugins/Install-Photoshop-Link.ps1': '6529feb4c8df6bf0f923a2e9d73f1bfad25bdb1764c1a9dbd1ffb598f21f4492', 'Plugins/AdobeLinkCheck.ps1': 'c8612ae764d05b6c6306d5f611ec9be2fa7185d2b726b7380a68ba244d69abec', 'Plugins/AdobeLinkFiles.json': '708e2cf7ab5d49d664173b82488b298c4236f419c12ca4e5e94c6e7e09c8524e', 'PaintSyncPluginUpdater.exe': 'a633e1135014ff1404da2d0877e45a9d9571cd5b4c2785cbf98ce127dcade9cb', 'Plugins/Versions.ini': '4b260db587ea1ab193ed0c433a0ad9ea0be559349a9b5341121c4de04b6fd42d', 'Plugins/NativeLinks/PaintSyncConnections.dll': 'fb0c2483bca51e9029b0e452ea92ae5f06b2ffeff937a3ee5f5deb2d8dde7695', 'Plugins/NativeLinks/Runtime/python312.dll': '9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120', 'Plugins/NativeLinks/embedded.py': '3b1f2a8468cd18df3236ee2f8e6a601a438b8a3c46b2f49a1f374ce1fe8353e1', 'Plugins/NativeLinks/PaintSync-Affinity-Link.js': '0003e5c2ac12c84779ad96ff7f737c5380c04f26eef2a9ec92957c08785ff4dc', 'Plugins/NativeLinks/Affinity-Read-Me.txt': 'fd5ce4d72b80689a4e39f34fb64d9cddc5ced388eb56323c2150a09d84e33af3'}
+          installed_files={'PaintSync.exe': 'c373420a2a135be35bbdb947b5f8c8c57d82dc4299b4419fea6e74fd59bc43a9', 'Plugins/PaintSync-Desktop-Link-1.0.2.ccx': '444f23943bdba73601a6a9c1ed3bc2755f03944275fb971e9a0d85104a575b1e', 'Plugins/Illustrator-Link/extension/engine.js': '03dcfe05144eb429bb13a3e999d695ad97a1414f3fb68195f828e69e53a905af', 'Plugins/GIMP-Link/paintsync-link/engine.py': '9e3c6e9892cc41cd74effa79a451d20b1d5070ed89d1eac835b42aa014821b24', 'Plugins/Illustrator-Link/extension/entitlement.js': 'd3cf0f262e211ed809933504b2177992da5bd780f4a5dab1fcb901d8d0ea5ff6', 'Plugins/GIMP-Link/paintsync-link/entitlement.py': 'ca67b674a87be4372bce212716a9df8dcd15663ff97956e81b056ba783d5cb78', 'Plugins/Illustrator-Link/extension/CSXS/manifest.xml': '42e3e289fd32f62166c8953c917bb4c14d00ff0c91f9e73a0851b0d2cc3d6471', 'Plugins/Illustrator-Link/Install.ps1': '80baf0300999a1447f24f52a07c31d3e4bc2b4cfd41180136dfcde79abe0c60c', 'Plugins/Install-Photoshop-Link.ps1': '6529feb4c8df6bf0f923a2e9d73f1bfad25bdb1764c1a9dbd1ffb598f21f4492', 'Plugins/AdobeLinkCheck.ps1': 'c8612ae764d05b6c6306d5f611ec9be2fa7185d2b726b7380a68ba244d69abec', 'Plugins/AdobeLinkFiles.json': '708e2cf7ab5d49d664173b82488b298c4236f419c12ca4e5e94c6e7e09c8524e', 'PaintSyncPluginUpdater.exe': 'd246feecdf4751b5b98234f70ca855d4cee1e2697371b2fa78b79fcfebcaf388', 'Plugins/Versions.ini': '4b260db587ea1ab193ed0c433a0ad9ea0be559349a9b5341121c4de04b6fd42d', 'Plugins/NativeLinks/PaintSyncConnections.dll': 'fb0c2483bca51e9029b0e452ea92ae5f06b2ffeff937a3ee5f5deb2d8dde7695', 'Plugins/NativeLinks/Runtime/python312.dll': '9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120', 'Plugins/NativeLinks/embedded.py': '3b1f2a8468cd18df3236ee2f8e6a601a438b8a3c46b2f49a1f374ce1fe8353e1', 'Plugins/NativeLinks/PaintSync-Affinity-Link.js': '0003e5c2ac12c84779ad96ff7f737c5380c04f26eef2a9ec92957c08785ff4dc', 'Plugins/NativeLinks/Affinity-Read-Me.txt': 'fd5ce4d72b80689a4e39f34fb64d9cddc5ced388eb56323c2150a09d84e33af3', 'PaintSyncTransfer.dll': 'f1eee84a54fe9e86dae22b3b7676721f7ec596c4cc124a277bb9fed9e5b3e87c', 'Receiver/PaintSync-Receiver-1.0.0.zip': '694ace2c15494ef3f4c638a917f477097cfcc080e980772c0b7f9ebbe63c4bdc', 'Third-Party/PaintSync-Transfer.txt': 'a6608ad51550142562775c000e9bf3a8a496b9fcb199432609ca9c549a3d7426'}
           for name,digest in installed_files.items():
               assert hashlib.sha256((install/name).read_bytes()).hexdigest()==digest,name
           assert (install/'Read-Me.txt').read_bytes()==(root/'Read-Me.txt').read_bytes()
@@ -353,6 +360,22 @@ jobs:
           Ed25519PublicKey.from_public_bytes(base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')).verify(image[-64:],b'PaintSync/desktop-image/v1\0'+hashlib.sha256(image[:-64]).digest())
           guide=(install/'Read-Me.txt').read_text(encoding='utf-8')
           assert 'COMPLETE USER GUIDE' in guide and '20. SUPPORT AND QUICK REFERENCE' in guide
+          import zipfile
+          assert contact_sentinel.read_bytes()==b'KEEP PRIVATE CONTACTS'
+          receiver_zip=install/'Receiver/PaintSync-Receiver-1.0.0.zip'
+          assert receiver_zip.read_bytes()==(root/'PaintSync-Receiver-1.0.0.zip').read_bytes()
+          with zipfile.ZipFile(receiver_zip) as archive:
+              assert archive.testzip() is None
+              assert set(archive.namelist())=={'PaintSync-Receiver.exe','PaintSyncTransfer.dll','READ-ME.txt','THIRD-PARTY-NOTICES.txt'}
+              receiver=root/'receiver';archive.extractall(receiver)
+          assert (receiver/'PaintSyncTransfer.dll').read_bytes()==(install/'PaintSyncTransfer.dll').read_bytes()
+          transfer=ctypes.CDLL(str(install/'PaintSyncTransfer.dll'))
+          for export in ['PST_Show','PST_ChooseRegular','PST_Start','PST_Poll','PST_Accept','PST_Cancel','PST_ContactsInit','PST_ContactGet','PST_SendRegular']:
+              assert getattr(transfer,export)
+          # The DLL loads with system dependencies on a clean Windows machine.
+          k32=ctypes.WinDLL('kernel32');k32.FreeLibrary.argtypes=[ctypes.c_void_p]
+          assert k32.FreeLibrary(transfer._handle)
+          print('PASS compiled sharing payload, clean-machine DLL imports and exact free receiver package.')
           start_menu=pathlib.Path(os.environ['APPDATA'])/'Microsoft/Windows/Start Menu/Programs/PaintSync'
           assert (start_menu/'User guide.lnk').is_file()
           assert not (start_menu/'Image Link.lnk').exists() and not (start_menu/'Affinity Link.lnk').exists()
@@ -405,8 +428,8 @@ jobs:
               assert value in settings.read_text(encoding='utf-16'),value
           exe=(install/'PaintSync.exe').read_bytes()
           fixed=struct.unpack_from('<13I',exe,exe.index(struct.pack('<I',0xfeef04bd)))
-          assert fixed[2:6]==(65536,1638400,65536,1638400) and fixed[7]==0
-          assert '1.0.25'.encode('utf-16le') in exe
+          assert fixed[2:6]==(65536,1703936,65536,1703936) and fixed[7]==0
+          assert '1.0.26'.encode('utf-16le') in exe
           u=ctypes.WinDLL('user32',use_last_error=True)
           u.GetDlgItem.argtypes=[wintypes.HWND,ctypes.c_int];u.GetDlgItem.restype=wintypes.HWND
           u.SendMessageW.argtypes=[wintypes.HWND,wintypes.UINT,ctypes.c_size_t,ctypes.c_ssize_t];u.SendMessageW.restype=ctypes.c_ssize_t
@@ -447,7 +470,7 @@ jobs:
                           return True
                       u.EnumChildWindows(hwnd,read_child,0)
                       assert 'Save Settings before hitting Start autosave.' in texts
-                      assert '1.0.25' in texts and 'Ready to Race?' in texts
+                      assert '1.0.26' in texts and 'Ready to Race?' in texts
                       output_windows=[]
                       u.GetClassNameW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
                       @callback
@@ -597,9 +620,9 @@ jobs:
           for value in ['CustomerID=123456','Seconds=0.5','Theme=2','Vehicle=trucks fordf150']:
               assert value in settings.read_text(encoding='utf-16')
           with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync') as key:
-              assert winreg.QueryValueEx(key,'DisplayVersion')[0]=='1.0.25'
+              assert winreg.QueryValueEx(key,'DisplayVersion')[0]=='1.0.26'
           subprocess.run([str(install/'Uninstall.exe'),'/S'],check=True,timeout=60)
-          removed=[install/'PaintSync.exe',install/'Read-Me.txt',start_menu/'User guide.lnk',start_menu/'Affinity Link.lnk',install/'Plugins/NativeLinks/PaintSyncConnections.dll']
+          removed=[install/'PaintSyncTransfer.dll',install/'Receiver/PaintSync-Receiver-1.0.0.zip',install/'PaintSync.exe',install/'Read-Me.txt',start_menu/'User guide.lnk',start_menu/'Affinity Link.lnk',install/'Plugins/NativeLinks/PaintSyncConnections.dll']
           for _ in range(240):
               if all(not path.exists() for path in removed):break
               time.sleep(.25)
@@ -607,6 +630,7 @@ jobs:
           assert not (install/'PaintSync.exe').exists()
           assert not (install/'Read-Me.txt').exists() and not (start_menu/'User guide.lnk').exists()
           assert settings.exists() and license_file.read_bytes()==license_before and sentinel.read_bytes()==b'KEEP PAINT'
+          assert contact_sentinel.read_bytes()==b'KEEP PRIVATE CONTACTS'
           print('PASS: upgrade from 1.0.12, stable metadata, compact Paint heading, Settings/Folders, export pop-out, Save/Start ordering and reminder, ID validation, activation page, locked exports, invalid saved license, normal close, upgrade persistence and uninstall preservation.')
 
 
@@ -623,10 +647,10 @@ jobs:
 
           assert os.environ.get('GITHUB_ACTIONS')=='true' and os.name=='nt'
           repo=os.environ['GITHUB_REPOSITORY'];assert repo=='arcdtrade/PaintSync-Releases'
-          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1025'
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'paintsync-1026'
           install=pathlib.Path(os.environ['LOCALAPPDATA'])/'Programs/PaintSync'
           data=pathlib.Path(os.environ['USERPROFILE'])/'AppData/Local/PaintRelay'
-          full=root/'PaintSync-Setup-1.0.25.exe';plugin_dir=root/'plugins'
+          full=root/'PaintSync-Setup-1.0.26.exe';plugin_dir=root/'plugins'
           assert plugin_dir.is_dir(), 'Download-only preparation job must supply the draft files'
           bundle=plugin_dir/'PaintSync-Plugins-1.1.0.exe'
           digest=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
@@ -657,7 +681,7 @@ jobs:
           setup(bundle,'/PLUGINS=none',expected=18)
           assert digest(install/'PaintSync.exe')==old_app
           setup(full,'/UPDATE','/PLUGINS=none')
-          print('PASS missing and older app rejected; actual stable 1.0.24 upgrades to 1.0.25.')
+          print('PASS missing and older app rejected; actual stable 1.0.24 upgrades to 1.0.26.')
 
           settings=data/'settings.ini';license=data/'license.key'
           sentinel=root/'iRacing/paint/sentinel.tga'
@@ -666,8 +690,8 @@ jobs:
           reg=r'Software\PaintSync\Setup'
           def unchanged():
               assert {p:digest(p) for p in watched}==protected, 'Plugin install changed app or user data'
-              with winreg.OpenKey(winreg.HKEY_CURRENT_USER,reg) as k:assert winreg.QueryValueEx(k,'InstalledVersion')[0]=='1.0.25'
-              with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync') as k:assert winreg.QueryValueEx(k,'DisplayVersion')[0]=='1.0.25'
+              with winreg.OpenKey(winreg.HKEY_CURRENT_USER,reg) as k:assert winreg.QueryValueEx(k,'InstalledVersion')[0]=='1.0.26'
+              with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync') as k:assert winreg.QueryValueEx(k,'DisplayVersion')[0]=='1.0.26'
 
           metadata=install/'Plugins/Versions.ini';original_metadata=metadata.read_bytes()
           target=install/'Plugins/NativeLinks/PaintSync-Affinity-Link.js';original=target.read_bytes()
@@ -757,7 +781,7 @@ jobs:
       - name: Verify the stable Photoshop migration and recovery paths
         shell: pwsh
         run: |
-          $qaRoot=Join-Path $env:RUNNER_TEMP 'paintsync-1025'
+          $qaRoot=Join-Path $env:RUNNER_TEMP 'paintsync-1026'
           $InstallerScript=Join-Path $qaRoot 'Install-Photoshop-Link.ps1'
           $Package=Join-Path $qaRoot 'PaintSync-Desktop-Link-1.0.2.ccx'
           $ErrorActionPreference = 'Stop'
@@ -815,49 +839,6 @@ jobs:
     steps:
       - name: Install public signature verifier
         run: python -m pip install cryptography==46.0.3
-      - name: Publish the verified independent plugin channel
-        shell: python
-        run: |
-          import base64,hashlib,json,os,pathlib,subprocess,time,urllib.request,xml.etree.ElementTree as ET
-          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-          repo=os.environ['GITHUB_REPOSITORY'];assert repo=='arcdtrade/PaintSync-Releases'
-          expected={'PaintSync-Plugins-1.1.0.exe': '7fb78a6eba8101db6e38d63894fb443ce3d56b859406b892e58b8c37f27a6b56', 'appcast.xml': '34fa05bf3515547a699371fd08fb25106efd1892aef95bc417428c15d4793866', 'Read-Me.txt': '4d5c17193a12932b4e6183ce4fb3504996b3ab47604758406f148c1728cbbba3', 'SHA256SUMS.txt': '7dabc0c982177d671c55c2d88d36b8093159a509e59c512fcc97ce21b4f47880'}
-          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'plugins-publish';root.mkdir()
-          def gh(*args):return subprocess.check_output(['gh',*map(str,args)],text=True).strip()
-          matches=[r for r in json.loads(gh('api',f'repos/{repo}/releases?per_page=100')) if r['name']=='PaintSync Plugins 1.1.0'];assert len(matches)==1
-          release=matches[0]
-          assert release['draft'] or release['tag_name']=='plugins-1.1.0'
-          assets={a['name']:a for a in release['assets']}
-          for name,digest in expected.items():
-           assert assets[name]['digest']=='sha256:'+digest
-           with (root/name).open('wb') as output:
-            subprocess.run(['gh','api',f"repos/{repo}/releases/assets/{assets[name]['id']}",'-H','Accept: application/octet-stream'],stdout=output,check=True)
-           assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest
-          ns='{http://www.andymatuschak.org/xml-namespaces/sparkle}'
-          item=ET.fromstring((root/'appcast.xml').read_bytes()).find('channel/item');enc=item.find('enclosure')
-          raw=(root/'PaintSync-Plugins-1.1.0.exe').read_bytes()
-          assert item.findtext(ns+'version')=='1.1.0' and int(enc.get('length'))==len(raw)
-          assert enc.get('url')==f'https://github.com/{repo}/releases/download/plugins-1.1.0/PaintSync-Plugins-1.1.0.exe'
-          Ed25519PublicKey.from_public_bytes(base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')).verify(base64.b64decode(enc.get(ns+'edSignature')),raw)
-          gh('api','--method','PATCH',f"repos/{repo}/releases/{release['id']}",'-f','tag_name=plugins-1.1.0','-F','draft=false','-F','prerelease=false','-f','make_latest=false')
-          def public(url):
-           with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'PaintSync-Release-Verification'}),timeout=60) as response:return response.read(100*1025*1025)
-          assert hashlib.sha256(public(enc.get('url'))).hexdigest()==expected['PaintSync-Plugins-1.1.0.exe']
-          check=subprocess.run(['gh','api',f'repos/{repo}/releases/tags/plugins-v2-channel'],capture_output=True,text=True)
-          if check.returncode:
-           assert '404' in check.stderr,check.stderr
-           gh('release','create','plugins-v2-channel',root/'appcast.xml','--repo',repo,'--title','PaintSync Plugin Update Channel','--notes','Signed independent editor connection updates. Requires PaintSync 1.0.25 or later. Windows installer and recovery checks passed.','--prerelease','--latest=false')
-          else:
-           channel=json.loads(check.stdout)
-           assert next(a for a in channel['assets'] if a['name']=='appcast.xml')['digest']=='sha256:'+expected['appcast.xml'],'Do not replace a different active plugin feed'
-          for attempt in range(24):
-           try:
-            if public(f'https://github.com/{repo}/releases/download/plugins-v2-channel/appcast.xml')==(root/'appcast.xml').read_bytes():break
-           except Exception:
-            if attempt==23:raise
-           time.sleep(5)
-          else:raise AssertionError('Public plugin channel bytes differ')
-          print('PASS independent plugin release and public signed channel after Windows verification.')
       - name: Promote the verified installer and switch the signed update feed
         shell: python
         run: |
@@ -869,11 +850,11 @@ jobs:
           import base64,hashlib,json,os,subprocess,time,urllib.request,xml.etree.ElementTree as ET
           from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
           repo=os.environ['GITHUB_REPOSITORY'];assert repo=='arcdtrade/PaintSync-Releases'
-          version='1.0.25';tag='v'+version
-          expected_installer='168256f8fb8986d6fa5b1beea9de2d2b5e3ecfe52d5d0ccc1eb5532f511edee0'
-          expected_feed='4a7024ba057979dc894302901417eea4d18c46df1a22daff985ea24dbbd2d6cd'
-          old_feed_digest='7993de3950eec40fae1f839ad8898017ce324eee6817f113f7e0fc1bc51f7ecb'
-          root=Path(os.environ['RUNNER_TEMP'])/'paintsync-publish-1025';root.mkdir()
+          version='1.0.26';tag='v'+version
+          expected_installer='0496a3c4fef4e6447b38aab40db12a74e947471e543b0bf78ccb5778af5a8d82'
+          expected_feed='f7f68ee97d4d2989415e534ca8c70612e9127f83c249155a1c6f63ab8b901a65'
+          old_feed_digest='4a7024ba057979dc894302901417eea4d18c46df1a22daff985ea24dbbd2d6cd'
+          root=Path(os.environ['RUNNER_TEMP'])/'paintsync-publish-1026';root.mkdir()
           def gh(*args):return subprocess.check_output(['gh',*map(str,args)],text=True).strip()
           def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
           matches=[r for r in json.loads(gh('api',f'repos/{repo}/releases?per_page=100')) if r['name']=='PaintSync '+version];assert len(matches)==1
@@ -896,7 +877,7 @@ jobs:
           Ed25519PublicKey.from_public_bytes(base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')).verify(base64.b64decode(enclosure.get(ns+'edSignature')),(root/installer).read_bytes())
           def public(url):
            request=urllib.request.Request(url,headers={'User-Agent':'PaintSync-Release-Verification'})
-           with urllib.request.urlopen(request,timeout=60) as response:return response.read(100*1025*1025)
+           with urllib.request.urlopen(request,timeout=60) as response:return response.read(100*1026*1026)
           # Publication is gated by the successful Windows job and exact signed bytes.
           if release['draft'] or release['prerelease']:
            gh('api','--method','PATCH',f"repos/{repo}/releases/{release['id']}",'-f','tag_name='+tag,'-F','draft=false','-F','prerelease=false','-f','make_latest=true')
@@ -915,9 +896,9 @@ jobs:
             channel=json.loads(gh('api',f'repos/{repo}/releases/tags/beta-channel'))
             staged=next(a for a in channel['assets'] if a['name']==staged_name)
            assert staged['digest']=='sha256:'+expected_feed
-           assert not any(a['name']=='appcast-1.0.24.xml' for a in channel['assets']), 'Prior archive already exists'
+           assert not any(a['name']=='appcast-1.0.25.xml' for a in channel['assets']), 'Prior archive already exists'
            # Keep the previous signed feed as a rollback archive; never delete assets.
-           gh('api','--method','PATCH',f"repos/{repo}/releases/assets/{active['id']}",'-f','name=appcast-1.0.24.xml')
+           gh('api','--method','PATCH',f"repos/{repo}/releases/assets/{active['id']}",'-f','name=appcast-1.0.25.xml')
            try:
             gh('api','--method','PATCH',f"repos/{repo}/releases/assets/{staged['id']}",'-f','name=appcast.xml')
            except Exception:
@@ -929,7 +910,7 @@ jobs:
             if live['digest']!='sha256:'+expected_feed:raise
           channel=json.loads(gh('api',f'repos/{repo}/releases/tags/beta-channel'))
           assert next(a for a in channel['assets'] if a['name']=='appcast.xml')['digest']=='sha256:'+expected_feed
-          archived=next(a for a in channel['assets'] if a['name']=='appcast-1.0.24.xml')
+          archived=next(a for a in channel['assets'] if a['name']=='appcast-1.0.25.xml')
           assert archived['digest']=='sha256:'+old_feed_digest
           # A replaced GitHub release asset may retain its old redirect briefly.
           # Verify the exact canonical URL; do not bypass the updater's real URL.
@@ -942,11 +923,7 @@ jobs:
            time.sleep(5)
           else:raise AssertionError('Canonical public updater feed still differs')
           channel_notes=root/'channel-notes.txt'
-          channel_notes.write_text('The active Windows feed offers [PaintSync '+version+'](https://github.com/'+repo+'/releases/tag/'+tag+').\n\nAdds built-in Affinity and Image Link windows, Affinity connection prompts, a separate plugin update notice, and startup checks with shorter scheduling options. Existing licenses, settings and editor links are preserved.\n\nIn PaintSync, open Settings > General > Check for updates. Save artwork and stop autosave before installing.\n\n[Windows installation, upgrade and panel startup checks passed](https://github.com/'+repo+'/actions/runs/'+os.environ['GITHUB_RUN_ID']+').\n',encoding='utf-8')
+          channel_notes.write_text('The active Windows feed offers [PaintSync '+version+'](https://github.com/'+repo+'/releases/tag/'+tag+').\n\nAdds Share paint, saved Regulars, one-time delivery and the free ZIP-only PaintSync Receiver. Both apps must remain open and online. Existing licenses, settings and editor links are preserved.\n\nIn PaintSync, open Settings > General > Check for updates. Save artwork and stop autosave before installing.\n\n[Windows installation, upgrade and panel startup checks passed](https://github.com/'+repo+'/actions/runs/'+os.environ['GITHUB_RUN_ID']+').\n',encoding='utf-8')
           gh('release','edit','beta-channel','--repo',repo,'--notes-file',channel_notes)
           print('PASS: Windows-verified stable '+version+', exact public installer hash, Ed25519 signature, previous-feed archive and active updater bytes.')
           print('https://github.com/'+repo+'/releases/tag/'+tag)
-
-
-
-
