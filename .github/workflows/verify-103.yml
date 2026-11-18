@@ -360,14 +360,14 @@ jobs:
           . $setupScript -PackageVersion '1.0.3'
 
           $external = Join-Path $env:APPDATA 'Adobe\UXP\Plugins\External'
-          $legacy = Join-Path $external 'com.drewtrader.paintrelay_2.2.9'
+          $fixtureLegacyPath = Join-Path $external 'com.drewtrader.paintrelay_2.2.9'
           $stable = Join-Path $external 'com.drewtrader.paintsync.photoshop_1.0.3'
-          if ((Test-Path -LiteralPath $legacy) -or (Test-Path -LiteralPath $stable)) {
+          if ((Test-Path -LiteralPath $fixtureLegacyPath) -or (Test-Path -LiteralPath $stable)) {
               throw 'Unexpected installed Photoshop link on the disposable runner.'
           }
-          New-Item -ItemType Directory -Path $legacy -Force | Out-Null
+          New-Item -ItemType Directory -Path $fixtureLegacyPath -Force | Out-Null
           '{"id":"com.drewtrader.paintrelay","name":"PaintSync for iRacing","version":"2.2.9"}' |
-              Set-Content -LiteralPath (Join-Path $legacy 'manifest.json') -Encoding ascii
+              Set-Content -LiteralPath (Join-Path $fixtureLegacyPath 'manifest.json') -Encoding ascii
 
           $agent = Join-Path $root 'AdobeInstallerTest.ps1'
           @'
@@ -385,13 +385,13 @@ jobs:
               throw 'The old panel may only be retired after a successful replacement.'
           }
           if ($keepLegacy) { exit 1 }
-          Rename-Item -LiteralPath $legacy -NewName 'retired-test-package'
+          Rename-Item -LiteralPath $fixtureLegacyPath -NewName 'retired-test-package'
           exit 0
           '@ | Set-Content -LiteralPath $agent -Encoding ascii
 
           $simulatedCode = -456
           $keepLegacy = $false
-          if ((Install-DesktopLink $agent $package $external) -ne 2 -or !(Test-Path -LiteralPath $legacy)) {
+          if ((Install-DesktopLink $agent $package $external) -ne 2 -or !(Test-Path -LiteralPath $fixtureLegacyPath)) {
               throw 'A failed Adobe install must keep the existing panel.'
           }
           $simulatedCode = 0
@@ -404,7 +404,7 @@ jobs:
 
           $keepLegacy = $false
           $simulatedCode = -412
-          if ((Install-DesktopLink $agent $package $external) -ne 0 -or (Test-Path -LiteralPath $legacy)) {
+          if ((Install-DesktopLink $agent $package $external) -ne 0 -or (Test-Path -LiteralPath $fixtureLegacyPath)) {
               throw 'Retry must accept the exact installed 1.0.3 link and retire the legacy panel.'
           }
 
