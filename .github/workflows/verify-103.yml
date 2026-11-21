@@ -1,4 +1,4 @@
-name: Verify and publish PaintSync Plugins 1.1.2
+name: Verify and publish PaintSync 1.0.27
 on:
   push:
     branches: [main]
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: paintsync-plugin-api-2-publication
+  group: paintsync-103-verification
   cancel-in-progress: false
 jobs:
   stage-release-files:
@@ -17,22 +17,22 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Stage exact draft assets and published upgrade fixtures
+      - name: Stage exact draft assets and original app and plugin installers
         env:
           GH_TOKEN: ${{ github.token }}
         shell: python
         run: |
-          expected = {'PaintSync-Plugins-1.1.2.exe': 'c719b2dbce7253213be0b0f67de6d88ada3022a7a164ee768d0defe1f338318f', 'appcast.xml': '616921f1a7e85492ad540c8cd77a540334c0eb0022ab52db18df1cc0fa2b0fc0', 'Read-Me.txt': 'c708e5a3e9fdb2d62f5b6c2a0001109001c5d85ff1d316d6e487befbfc7b5e7d', 'SHA256SUMS.txt': '6aac484b17ff7cd84b79bfd661d0b90f41608164eddc767549a929960eef35a5'}
-          previous_feed = '412dd20e0664350a20ee9f2cc65cfaaf48e7ca0627373c7ee625d9b435f4d77e'
-          release_id = 449745966
+          expected = {'PaintSync-Setup-1.0.27.exe': 'e318638f89a33cad7c30a30e1d41cfe66dca41cf5c8a13ecec5ac5aff979c4b3', 'appcast.xml': '8f3f36eb046dc7158636dabfdf0ee61fc6c2df0d31813296e2f4ed370c3fa10f', 'Read-Me.txt': 'cd8483996c95ce1d5d41fbdd9b7dc669fe8cb3e265084469a793b0fb215093a9', 'SHA256SUMS.txt': '798bede2ac4ee641ca8abbe5a1e0a6f27abee748418685d9575f357ea45a28a1'}
+          previous_feed = 'f7f68ee97d4d2989415e534ca8c70612e9127f83c249155a1c6f63ab8b901a65'
+          release_id = 453892757
           import hashlib, json, os, subprocess
           from pathlib import Path
 
           repo = os.environ['GITHUB_REPOSITORY']; assert repo == 'arcdtrade/PaintSync-Releases'
-          tag = 'plugins-1.1.2'
-          title = 'PaintSync Plugins 1.1.2'
-          channel_tag = 'plugins-v2-channel'
-          installer = 'PaintSync-Plugins-1.1.2.exe'
+          tag = 'v1.0.27'
+          title = 'PaintSync 1.0.27'
+          channel_tag = 'beta-channel'
+          installer = 'PaintSync-Setup-1.0.27.exe'
           feed = 'appcast.xml'
 
           def gh(*args):
@@ -51,7 +51,7 @@ jobs:
           def candidate_release():
               pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{repo}/releases?per_page=100'))
               matches = [r for page in pages for r in page if r['name'] == title or r['tag_name'] == tag]
-              assert len(matches) == 1, 'Expected exactly one release or draft for plugin version 1.1.2'
+              assert len(matches) == 1, 'Expected exactly one release or draft for app version 1.0.27'
               release = matches[0]
               assert release['name'] == title and release['id'] == release_id
               assert release['tag_name'] == tag or (release['draft'] and release['tag_name'].startswith('untagged-'))
@@ -75,8 +75,8 @@ jobs:
 
           def has_hash(asset, digest):
               return asset is not None and asset['state'] == 'uploaded' and asset['digest'] == 'sha256:' + digest
-          previous_installers = {'plugins-1.1.1': ('PaintSync-Plugins-1.1.1.exe', 'be7da842b3fafafb18cb15af51e1ca7e8fe5a220633cbe9b901b8c3c69bb717f'), 'v1.0.24': ('PaintSync-Setup-1.0.24.exe', '9f88eb90d3507549e89916d5d25cde2d7ba87dc882241940b6e26c034c525d37'), 'v1.0.26': ('PaintSync-Setup-1.0.26.exe', '0496a3c4fef4e6447b38aab40db12a74e947471e543b0bf78ccb5778af5a8d82')}
-          root = Path(os.environ['RUNNER_TEMP']) / 'paintsync-plugins-112'
+          previous_installers = {'v1.0.26': ('PaintSync-Setup-1.0.26.exe', '0496a3c4fef4e6447b38aab40db12a74e947471e543b0bf78ccb5778af5a8d82'), 'plugins-1.1.2': ('PaintSync-Plugins-1.1.2.exe', 'c719b2dbce7253213be0b0f67de6d88ada3022a7a164ee768d0defe1f338318f')}
+          root = Path(os.environ['RUNNER_TEMP']) / 'paintsync-1027'
           folder = root / 'candidate'; folder.mkdir(parents=True)
           release, assets = candidate_release()
           channel = channel_assets()
@@ -84,391 +84,47 @@ jobs:
           if not has_hash(active, previous_feed) and not has_hash(active, expected[feed]):
               # Recover only the recognizable interrupted switch, in the gated publisher.
               assert active is None
-              assert has_hash(channel.get('appcast-1.1.1.xml'), previous_feed)
-              assert has_hash(channel.get('appcast-1.1.2.xml'), expected[feed])
+              assert has_hash(channel.get('appcast-1.0.26.xml'), previous_feed)
+              assert has_hash(channel.get('appcast-1.0.27.xml'), expected[feed])
           for name, digest in expected.items():
               download_asset(assets[name], folder / name, digest)
+          baseline = root / 'baseline'; baseline.mkdir()
           for version, (name, digest) in previous_installers.items():
-              download_asset(assets_by_name(release_for_tag(version))[name], root / name, digest)
+              download_asset(assets_by_name(release_for_tag(version))[name], baseline / name, digest)
           print('PASS candidate assets and exact published app and plugin installers staged without running any installer.')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: verified-plugin-release-inputs
-          path: ${{ runner.temp }}/paintsync-plugins-112
+          name: verified-paintsync-1027-inputs
+          path: ${{ runner.temp }}/paintsync-1027
           retention-days: 2
           if-no-files-found: error
-  verify-windows:
+  verify-installation:
     needs: stage-release-files
     runs-on: windows-latest
-    timeout-minutes: 16
+    timeout-minutes: 18
     permissions:
       contents: read
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: verified-plugin-release-inputs
-          path: ${{ runner.temp }}/paintsync-plugins-112
+          name: verified-paintsync-1027-inputs
+          path: ${{ runner.temp }}/paintsync-1027
       - name: Install public signature verifier
         run: python -m pip install cryptography==46.0.3
-      - name: Verify signed plugin upgrade, running editor protection, repair, and app data
-        env:
-          PLUGIN_EXPECTED: '{"PaintSync-Plugins-1.1.2.exe": "c719b2dbce7253213be0b0f67de6d88ada3022a7a164ee768d0defe1f338318f", "appcast.xml": "616921f1a7e85492ad540c8cd77a540334c0eb0022ab52db18df1cc0fa2b0fc0", "Read-Me.txt": "c708e5a3e9fdb2d62f5b6c2a0001109001c5d85ff1d316d6e487befbfc7b5e7d", "SHA256SUMS.txt": "6aac484b17ff7cd84b79bfd661d0b90f41608164eddc767549a929960eef35a5"}'
+      - name: Verify staged bytes and official updater signature
         shell: python
         run: |
-          """Verify the installer on a disposable Windows runner with read-only GitHub access."""
-
-          import base64
-          import configparser
-          import ctypes
-          import hashlib
-          import json
-          import os
-          import shutil
-          import subprocess
-          import time
-          import winreg
-          import xml.etree.ElementTree as ET
-          import zipfile
-          from ctypes import wintypes
-          from pathlib import Path
-
-          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
-          assert os.name == 'nt' and os.environ.get('GITHUB_ACTIONS') == 'true'
-          repo = os.environ['GITHUB_REPOSITORY']
-          assert repo == 'arcdtrade/PaintSync-Releases'
-          root = Path(os.environ['RUNNER_TEMP']) / 'paintsync-plugins-112'
-          install = Path(os.environ['LOCALAPPDATA']) / 'Programs/PaintSync'
-          data = Path(os.environ['LOCALAPPDATA']) / 'PaintRelay'
-          files = root / 'candidate'
-          bundle = files / 'PaintSync-Plugins-1.1.2.exe'
-          previous_app = root / 'PaintSync-Setup-1.0.26.exe'
-          previous_bundle = root / 'PaintSync-Plugins-1.1.1.exe'
-          older_app = root / 'PaintSync-Setup-1.0.24.exe'
-          metadata = install / 'Plugins/Versions.ini'
-          app_ccx = install / 'Plugins/PaintSync-Desktop-Link-1.0.2.ccx'
-          old_ccx = install / 'Plugins/PaintSync-Desktop-Link-1.0.3.ccx'
-          new_ccx = install / 'Plugins/PaintSync-Desktop-Link-1.0.4.ccx'
-          registry = r'Software\PaintSync\Setup'
-
-
-          def digest(path):
-              return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-          def run_setup(executable, *args, expected=0):
-              result = subprocess.run([str(executable), '/S', *args], timeout=100)
-              assert result.returncode == expected, (executable.name, result.returncode, expected)
-
-
-          def plugin_versions():
-              config = configparser.ConfigParser()
-              config.read(metadata, encoding='ascii')
-              return config
-
-
-          def configure_editor(name, enabled):
-              with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry, 0, winreg.KEY_SET_VALUE) as key:
-                  winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, int(enabled))
-
-
-          assert digest(previous_bundle) == 'be7da842b3fafafb18cb15af51e1ca7e8fe5a220633cbe9b901b8c3c69bb717f'
-          assert digest(previous_app) == '0496a3c4fef4e6447b38aab40db12a74e947471e543b0bf78ccb5778af5a8d82'
-          assert digest(older_app) == '9f88eb90d3507549e89916d5d25cde2d7ba87dc882241940b6e26c034c525d37'
-          expected = json.loads(os.environ['PLUGIN_EXPECTED'])
-          for name, sha in expected.items():
-              assert digest(files / name) == sha, name
-          ns = '{http://www.andymatuschak.org/xml-namespaces/sparkle}'
-          item = ET.fromstring((files / 'appcast.xml').read_bytes()).find('channel/item')
-          enclosure = item.find('enclosure')
-          assert item.findtext(ns + 'version') == '1.1.2'
-          assert enclosure.get('url') == f'https://github.com/{repo}/releases/download/plugins-1.1.2/{bundle.name}'
-          assert enclosure.get(ns + 'installerArguments') == '/UPDATE'
-          assert enclosure.get(ns + 'os') == 'windows-x64'
-          assert int(enclosure.get('length')) == bundle.stat().st_size
-          public = base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')
-          Ed25519PublicKey.from_public_bytes(public).verify(
-              base64.b64decode(enclosure.get(ns + 'edSignature')), bundle.read_bytes()
-          )
-
-          assert not (install / 'PaintSync.exe').exists()
-          run_setup(bundle, '/PLUGINS=none', expected=18)
-          data.mkdir(parents=True, exist_ok=True)
-          settings = data / 'settings.ini'
-          settings.write_text(
-              '[App]\nCustomerID=123456\n[Appearance]\nLanguage=en\n[Updates]\nAutomatic=0\n'
-              '[PluginReleaseFixture]\nPreserve=Yes\n',
-              encoding='utf-16',
-          )
-          run_setup(older_app, '/ID=123456', '/LANG=en', '/PLUGINS=none')
-          old_app_digest = digest(install / 'PaintSync.exe')
-          run_setup(bundle, '/UPDATE', '/PLUGINS=none', expected=18)
-          assert digest(install / 'PaintSync.exe') == old_app_digest
-          run_setup(previous_app, '/UPDATE', '/PLUGINS=none')
-          assert plugin_versions()['Bundle']['Version'] == '1.1.0'
-          assert plugin_versions()['Links']['Photoshop'] == '1.0.2'
-          assert app_ccx.is_file()
-
-          license_file = data / 'license.key'
-          license_file.write_bytes(b'Preserve the installed key bytes')
-          protected_license = data / 'polar-license.dat'
-          protected_license.write_bytes(b'Preserve the local license cache bytes')
-          paint_file = root / 'iRacing/paint/sentinel.tga'
-          paint_file.parent.mkdir(parents=True)
-          paint_file.write_bytes(b'Preserve the customer artwork bytes')
-          contacts = Path(os.environ['LOCALAPPDATA']) / 'PaintSyncTransfer/regulars.dat'
-          contacts.parent.mkdir(exist_ok=True)
-          contacts.write_bytes(b'Preserve the existing sharing contacts bytes')
-
-          watched = [
-              install / 'PaintSync.exe', install / 'WinSparkle.dll',
-              install / 'PaintSyncPluginUpdater.exe', install / 'Uninstall.exe',
-              install / 'PaintSyncTransfer.dll', install / 'Receiver/PaintSync-Receiver-1.0.0.zip',
-              install / 'Read-Me.txt', settings, license_file, protected_license, paint_file, contacts,
-          ]
-          protected = {path: digest(path) for path in watched}
-
-
-          def unchanged():
-              assert {path: digest(path) for path in watched} == protected
-              with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry) as key:
-                  assert winreg.QueryValueEx(key, 'InstalledVersion')[0] == '1.0.26'
-              uninstall = r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync'
-              with winreg.OpenKey(winreg.HKEY_CURRENT_USER, uninstall) as key:
-                  assert winreg.QueryValueEx(key, 'DisplayVersion')[0] == '1.0.26'
-
-
-          run_setup(previous_bundle, '/UPDATE', '/PLUGINS=none')
-          unchanged()
-          assert plugin_versions()['Bundle']['Version'] == '1.1.1'
-          assert plugin_versions()['Links']['Photoshop'] == '1.0.3'
-          assert old_ccx.is_file() and not app_ccx.exists()
-          with zipfile.ZipFile(old_ccx) as archive:
-              assert json.loads(archive.read('manifest.json'))['version'] == '1.0.3'
-          print('PASS exact published plugin 1.1.1 installed on the public 1.0.26 app.')
-
-          check_files = root / 'photoshop-setup'
-          check_files.mkdir()
-          shutil.copyfile(old_ccx, check_files / old_ccx.name)
-          before_metadata = metadata.read_bytes()
-          before_ccx = digest(old_ccx)
-
-
-          def simulate_open_editor(name, args, verify_intact):
-              fake = root / (name + '.exe')
-              shutil.copyfile(Path(os.environ['SystemRoot']) / 'System32/ping.exe', fake)
-              proc = subprocess.Popen([str(fake), '-t', '127.0.0.1'], stdout=subprocess.DEVNULL)
-              try:
-                  time.sleep(.35)
-                  run_setup(bundle, '/UPDATE', *args, expected=16)
-                  assert proc.poll() is None, 'Setup closed an editor on its own'
-                  verify_intact()
-                  unchanged()
-              finally:
-                  if proc.poll() is None:
-                      proc.terminate()
-                  proc.wait(timeout=8)
-
-
-          def previous_links_intact():
-              assert metadata.read_bytes() == before_metadata
-              assert digest(old_ccx) == before_ccx and not new_ccx.exists()
-
-
-          configure_editor('Photoshop', True)
-          simulate_open_editor('Photoshop', (), previous_links_intact)
-          configure_editor('Photoshop', False)
-          simulate_open_editor('Affinity', ('/PLUGINS=none',), previous_links_intact)
-          print('PASS Photoshop and Affinity close prompts leave the old bundle and all user data intact.')
-
-          run_setup(bundle, '/UPDATE', '/PLUGINS=none')
-          unchanged()
-          new_versions = plugin_versions()
-          assert dict(new_versions['Bundle']) == {
-              'version': '1.1.2', 'api': '2', 'minapp': '1.0.25', 'maxapp': '2.0.0',
-          }
-          assert dict(new_versions['Links']) == {
-              'photoshop': '1.0.4', 'illustrator': '1.0.1', 'gimp': '0.1.6',
-              'affinity': '1.1.0', 'imagelink': '1.0.0',
-          }
-          assert new_ccx.is_file() and not old_ccx.exists()
-          with zipfile.ZipFile(new_ccx) as archive:
-              manifest = json.loads(archive.read('manifest.json'))
-              assert manifest['id'] == 'com.drewtrader.paintsync.photoshop'
-              assert manifest['version'] == '1.0.4'
-              assert manifest['host']['minVersion'] == '25.10.0'
-              hashes = json.loads((install / 'Plugins/AdobeLinkFiles.json').read_text(encoding='utf-8'))
-              assert hashes['PhotoshopVersion'] == '1.0.4'
-              assert hashes['Photoshop'] == {
-                  name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist()
-              }
-          assert any(
-              path.read_bytes() == before_metadata
-              for path in (install / 'PluginBackups').glob('previous-*/Versions.ini')
-          )
-          print('PASS published 1.1.1 to 1.1.2 upgrade installs the exact Photoshop 1.0.4 CCX and backs up the old bundle.')
-
-          stable_metadata = metadata.read_bytes()
-          stable_ccx = new_ccx.read_bytes()
-          kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-          kernel.CreateFileW.argtypes = [
-              wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
-              wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
-          ]
-          kernel.CreateFileW.restype = wintypes.HANDLE
-          kernel.CloseHandle.argtypes = [wintypes.HANDLE]
-          lock = kernel.CreateFileW(str(install / 'Plugins'), 0x80000000, 3, None, 3, 0x02000000, None)
-          assert lock != wintypes.HANDLE(-1).value
-          try:
-              run_setup(bundle, '/UPDATE', '/PLUGINS=none', expected=20)
-              assert metadata.read_bytes() == stable_metadata and new_ccx.read_bytes() == stable_ccx
-              unchanged()
-          finally:
-              kernel.CloseHandle(lock)
-          assert not list(install.glob('Plugins.pending-*'))
-          new_ccx.write_bytes(b'Broken package fixture')
-          run_setup(bundle, '/UPDATE', '/PLUGINS=none')
-          assert metadata.read_bytes() == stable_metadata and new_ccx.read_bytes() == stable_ccx
-          unchanged()
-          print('PASS locked-folder rollback preserves the installed files and retry repairs a damaged CCX.')
-
-          marker = install / 'Plugins/keep-newer.txt'
-          marker.write_text('Keep the newer compatible package', encoding='ascii')
-          run_setup(previous_app, '/UPDATE', '/PLUGINS=none')
-          assert marker.is_file() and metadata.read_bytes() == stable_metadata and new_ccx.read_bytes() == stable_ccx
-          run_setup(previous_bundle, '/UPDATE', '/PLUGINS=none', expected=19)
-          assert marker.is_file() and metadata.read_bytes() == stable_metadata and new_ccx.read_bytes() == stable_ccx
-          metadata.write_bytes(stable_metadata.replace(b'Version=1.1.2', b'Version=1.1.3', 1))
-          run_setup(bundle, '/UPDATE', '/PLUGINS=none', expected=19)
-          assert marker.is_file()
-          metadata.write_bytes(stable_metadata)
-          print('PASS previously shipped app installer preserves the new bundle and bundle downgrade is refused.')
-
-          start_menu = Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs/PaintSync'
-          shortcut = start_menu / 'Photoshop plugin setup.lnk'
-          assert shortcut.is_file() and '1.0.4'.encode('utf-16le') in shortcut.read_bytes()
-          for name in ('AdobeLinkFiles.json', 'AdobeLinkCheck.ps1', 'Install-Photoshop-Link.ps1', new_ccx.name):
-              shutil.copyfile(install / 'Plugins' / name, check_files / name)
-
-          run_setup(install / 'Uninstall.exe')
-          for _ in range(100):
-              if not any((install / name).exists() for name in ['PaintSync.exe', 'Plugins', 'PluginBackups']):
-                  break
-              time.sleep(.2)
-          assert not any((install / name).exists() for name in ['PaintSync.exe', 'Plugins', 'PluginBackups'])
-          assert all(digest(path) == protected[path] for path in (license_file, protected_license, paint_file, contacts))
-          assert 'Preserve=Yes' in settings.read_text(encoding='utf-16')
-          print('PASS removal cleans plugin files while leaving the paint, activation, settings, and contacts.')
-      - name: Verify shipped Photoshop migration and file validation
-        shell: powershell
-        run: |
-          # Test the shipped Adobe migration and exact-file validation in a disposable runner.
-          $ErrorActionPreference = 'Stop'
-          if ($env:GITHUB_ACTIONS -ne 'true' -or $env:GITHUB_REPOSITORY -ne 'arcdtrade/PaintSync-Releases') {
-              throw 'Use a disposable PaintSync GitHub Windows runner for this check.'
-          }
-          $root = Join-Path $env:RUNNER_TEMP 'paintsync-plugins-112'
-          $setupFiles = Join-Path $root 'photoshop-setup'
-          $package = Join-Path $setupFiles 'PaintSync-Desktop-Link-1.0.4.ccx'
-          $previousPackage = Join-Path $setupFiles 'PaintSync-Desktop-Link-1.0.3.ccx'
-          $setupScript = Join-Path $setupFiles 'Install-Photoshop-Link.ps1'
-          $verifier = Join-Path $setupFiles 'AdobeLinkCheck.ps1'
-          . $setupScript -PackageVersion '1.0.4'
-
-          $external = Join-Path $env:APPDATA 'Adobe\UXP\Plugins\External'
-          $fixtureLegacyPath = Join-Path $external 'com.drewtrader.paintrelay_2.2.9'
-          $stable = Join-Path $external 'com.drewtrader.paintsync.photoshop_1.0.4'
-          $previousStable = Join-Path $external 'com.drewtrader.paintsync.photoshop_1.0.3'
-          if ((Test-Path -LiteralPath $fixtureLegacyPath) -or (Test-Path -LiteralPath $stable) -or (Test-Path -LiteralPath $previousStable)) {
-              throw 'Unexpected installed Photoshop link on the disposable runner.'
-          }
-          New-Item -ItemType Directory -Path $fixtureLegacyPath -Force | Out-Null
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [IO.Compression.ZipFile]::ExtractToDirectory($previousPackage, $previousStable)
-          '{"id":"com.drewtrader.paintrelay","name":"PaintSync for iRacing","version":"2.2.9"}' |
-              Set-Content -LiteralPath (Join-Path $fixtureLegacyPath 'manifest.json') -Encoding ascii
-
-          $agent = Join-Path $root 'AdobeInstallerTest.ps1'
-          @'
-          param($Operation, $Product)
-          if ($Operation -eq '/install') {
-              if ($Product -ne $package) { throw 'Install did not select the signed 1.0.4 CCX.' }
-              if ($simulatedCode -ne 0) { exit $simulatedCode }
-              if (!(Test-Path -LiteralPath $stable)) {
-                  Add-Type -AssemblyName System.IO.Compression.FileSystem
-                  [IO.Compression.ZipFile]::ExtractToDirectory($package, $stable)
-              }
-              if (Test-Path -LiteralPath $previousStable) {
-                  Rename-Item -LiteralPath $previousStable -NewName 'superseded-stable-test-package'
-              }
-              exit 0
-          }
-          if ($Operation -ne '/remove' -or $Product -cne 'PaintSync for iRacing' -or !(Test-Path -LiteralPath $stable)) {
-              throw 'The old panel may only be retired after a successful replacement.'
-          }
-          if ($keepLegacy) { exit 1 }
-          Rename-Item -LiteralPath $fixtureLegacyPath -NewName 'retired-test-package'
-          exit 0
-          '@ | Set-Content -LiteralPath $agent -Encoding ascii
-
-          $simulatedCode = -456
-          $keepLegacy = $false
-          if ((Install-DesktopLink $agent $package $external) -ne 2 -or !(Test-Path -LiteralPath $fixtureLegacyPath) -or
-              !(Test-Path -LiteralPath $previousStable) -or (Test-Path -LiteralPath $stable)) {
-              throw 'A failed Adobe install must keep both existing panels.'
-          }
-          $simulatedCode = 0
-          $keepLegacy = $true
-          if ((Install-DesktopLink $agent $package $external) -ne 3 -or !(Test-Path -LiteralPath $stable) -or
-              (Test-Path -LiteralPath $previousStable)) {
-              throw 'Failure to retire an older link must report an actionable status.'
-          }
-          & $verifier -Action VerifyPhotoshop -Editors 1
-          if ($LASTEXITCODE -ne 0) { throw 'The newly extracted CCX must pass the shipped Photoshop file verifier.' }
-
-          $keepLegacy = $false
-          $simulatedCode = -412
-          if ((Install-DesktopLink $agent $package $external) -ne 0 -or (Test-Path -LiteralPath $fixtureLegacyPath)) {
-              throw 'Retry must accept the exact installed 1.0.4 link and retire the legacy panel.'
-          }
-
-          $target = Join-Path $stable 'link.js'
-          $link = [IO.File]::ReadAllBytes($target)
-          try {
-              [IO.File]::WriteAllText($target, 'Damaged link fixture')
-              & $verifier -Action VerifyPhotoshop -Editors 1
-              if ($LASTEXITCODE -ne 2) { throw 'The shipped verifier accepted a modified link file.' }
-          } finally {
-              [IO.File]::WriteAllBytes($target, $link)
-          }
-          & $verifier -Action VerifyPhotoshop -Editors 1
-          if ($LASTEXITCODE -ne 0) { throw 'The restored link should pass validation.' }
-          Write-Output 'PASS shipped Photoshop migration helper keeps the old panel on failure, recovers on retry, and verifies the exact 1.0.4 files. Adobe installer responses were simulated.'
-  publish-verified-plugin:
-    needs: verify-windows
-    runs-on: ubuntu-latest
-    timeout-minutes: 18
-    permissions:
-      contents: write
-    steps:
-      - name: Install public signature verifier
-        run: python -m pip install cryptography==46.0.3
-      - name: Publish verified plugin and switch its signed feed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: python
-        run: |
-          expected = {'PaintSync-Plugins-1.1.2.exe': 'c719b2dbce7253213be0b0f67de6d88ada3022a7a164ee768d0defe1f338318f', 'appcast.xml': '616921f1a7e85492ad540c8cd77a540334c0eb0022ab52db18df1cc0fa2b0fc0', 'Read-Me.txt': 'c708e5a3e9fdb2d62f5b6c2a0001109001c5d85ff1d316d6e487befbfc7b5e7d', 'SHA256SUMS.txt': '6aac484b17ff7cd84b79bfd661d0b90f41608164eddc767549a929960eef35a5'}
-          previous_feed = '412dd20e0664350a20ee9f2cc65cfaaf48e7ca0627373c7ee625d9b435f4d77e'
-          release_id = 449745966
+          expected = {'PaintSync-Setup-1.0.27.exe': 'e318638f89a33cad7c30a30e1d41cfe66dca41cf5c8a13ecec5ac5aff979c4b3', 'appcast.xml': '8f3f36eb046dc7158636dabfdf0ee61fc6c2df0d31813296e2f4ed370c3fa10f', 'Read-Me.txt': 'cd8483996c95ce1d5d41fbdd9b7dc669fe8cb3e265084469a793b0fb215093a9', 'SHA256SUMS.txt': '798bede2ac4ee641ca8abbe5a1e0a6f27abee748418685d9575f357ea45a28a1'}
+          previous_feed = 'f7f68ee97d4d2989415e534ca8c70612e9127f83c249155a1c6f63ab8b901a65'
+          release_id = 453892757
           import hashlib, json, os, subprocess
           from pathlib import Path
 
           repo = os.environ['GITHUB_REPOSITORY']; assert repo == 'arcdtrade/PaintSync-Releases'
-          tag = 'plugins-1.1.2'
-          title = 'PaintSync Plugins 1.1.2'
-          channel_tag = 'plugins-v2-channel'
-          installer = 'PaintSync-Plugins-1.1.2.exe'
+          tag = 'v1.0.27'
+          title = 'PaintSync 1.0.27'
+          channel_tag = 'beta-channel'
+          installer = 'PaintSync-Setup-1.0.27.exe'
           feed = 'appcast.xml'
 
           def gh(*args):
@@ -487,7 +143,299 @@ jobs:
           def candidate_release():
               pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{repo}/releases?per_page=100'))
               matches = [r for page in pages for r in page if r['name'] == title or r['tag_name'] == tag]
-              assert len(matches) == 1, 'Expected exactly one release or draft for plugin version 1.1.2'
+              assert len(matches) == 1, 'Expected exactly one release or draft for app version 1.0.27'
+              release = matches[0]
+              assert release['name'] == title and release['id'] == release_id
+              assert release['tag_name'] == tag or (release['draft'] and release['tag_name'].startswith('untagged-'))
+              assets = assets_by_name(release)
+              assert set(assets) == set(expected), 'The release asset set differs from the approved version'
+              for name, digest in expected.items():
+                  assert assets[name]['state'] == 'uploaded' and assets[name]['digest'] == 'sha256:' + digest, name
+              return release, assets
+
+          def download_asset(asset, path, digest):
+              assert asset['state'] == 'uploaded' and asset['digest'] == 'sha256:' + digest, path.name
+              with path.open('wb') as handle:
+                  subprocess.run(
+                      ['gh', 'api', f"repos/{repo}/releases/assets/{asset['id']}", '-H', 'Accept: application/octet-stream'],
+                      stdout=handle, check=True, timeout=120,
+                  )
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, path.name
+
+          def channel_assets():
+              return assets_by_name(release_for_tag(channel_tag))
+
+          def has_hash(asset, digest):
+              return asset is not None and asset['state'] == 'uploaded' and asset['digest'] == 'sha256:' + digest
+          import base64, xml.etree.ElementTree as ET
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+          folder = Path(os.environ['RUNNER_TEMP']) / 'paintsync-1027/candidate'
+          for name, digest in expected.items():
+              assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest, name
+          ns = '{http://www.andymatuschak.org/xml-namespaces/sparkle}'
+          item = ET.fromstring((folder / feed).read_bytes()).find('channel/item')
+          enclosure = item.find('enclosure')
+          assert item.findtext(ns + 'version') == '1.0.27'
+          assert enclosure.get('url') == f'https://github.com/{repo}/releases/download/{tag}/{installer}'
+          assert enclosure.get(ns + 'installerArguments') == '/UPDATE'
+          assert enclosure.get(ns + 'os') == 'windows-x64'
+          raw = (folder / installer).read_bytes()
+          assert int(enclosure.get('length')) == len(raw)
+          public_key = base64.b64decode('VMLVwz8SJ4lwAMi9clASezBmvJEGIqqjgjkziTF5Lwk=')
+          Ed25519PublicKey.from_public_bytes(public_key).verify(
+              base64.b64decode(enclosure.get(ns + 'edSignature')), raw
+          )
+          print('PASS Windows release input hashes and official updater signature.')
+      - name: Check 1.0.26 upgrade and preserve number-preview files
+        env:
+          INSTALLED_EXPECTED: '{"PaintSync.exe": "ddf42754ce4a74c6e660c6c61e793977c3d39631347a298ce20377f66753414d", "PaintSyncPluginUpdater.exe": "a67e4ba0b63afb57e368dfa2abbcdacec174476d050f8e6b419578c0d382ad2a", "PaintSyncTransfer.dll": "f1eee84a54fe9e86dae22b3b7676721f7ec596c4cc124a277bb9fed9e5b3e87c", "WinSparkle.dll": "9b43b1c16ee39fb9a91b5bd75138767898779510e0836be2919250607cdbe8ab", "Read-Me.txt": "cd8483996c95ce1d5d41fbdd9b7dc669fe8cb3e265084469a793b0fb215093a9", "Receiver/PaintSync-Receiver-1.0.0.zip": "694ace2c15494ef3f4c638a917f477097cfcc080e980772c0b7f9ebbe63c4bdc", "Plugins/Versions.ini": "d6639f8c97f41d9b0acda7213e9aed376d0d80b21ba238c7eebca87aa5e02282", "Plugins/PaintSync-Desktop-Link-1.0.4.ccx": "96c12bdb3457785ecbea171f2e0cb1a7f8ce83c57ee819888651236cd1e26dba", "Plugins/AdobeLinkFiles.json": "ba486f491e3bafd14ad83c64387e287096766ad69c6383bf10327a6c7b1fd984", "Plugins/NativeLinks/PaintSyncConnections.dll": "fb0c2483bca51e9029b0e452ea92ae5f06b2ffeff937a3ee5f5deb2d8dde7695"}'
+          NUMBER_DIAGNOSTICS: '["Kept the held Custom Number copy in place. A new Custom Number export can still run.", "Sim Stamp can export, but iRacing may still show the Custom Number paint because its held paths are unavailable."]'
+        shell: python
+        run: |
+          """Run the signed 1.0.27 upgrade and preservation check on a disposable Windows runner."""
+
+          import ctypes
+          import hashlib
+          import json
+          import os
+          import struct
+          import subprocess
+          import time
+          import winreg
+          import zipfile
+          from ctypes import wintypes
+          from pathlib import Path
+
+
+          assert os.name == 'nt' and os.environ.get('GITHUB_ACTIONS') == 'true'
+          assert os.environ['GITHUB_REPOSITORY'] == 'arcdtrade/PaintSync-Releases'
+          root = Path(os.environ['RUNNER_TEMP']) / 'paintsync-1027'
+          install = Path(os.environ['LOCALAPPDATA']) / 'Programs/PaintSync'
+          data = Path(os.environ['USERPROFILE']) / 'AppData/Local/PaintRelay'
+          baseline = root / 'baseline/PaintSync-Setup-1.0.26.exe'
+          plugin = root / 'baseline/PaintSync-Plugins-1.1.2.exe'
+          target = root / 'candidate/PaintSync-Setup-1.0.27.exe'
+          app = install / 'PaintSync.exe'
+          settings = data / 'settings.ini'
+
+
+          def digest(path):
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+          def setup(binary, *args, expected=0):
+              result = subprocess.run([str(binary), '/S', *args], timeout=100)
+              assert result.returncode == expected, (binary.name, result.returncode, expected)
+
+
+          def version(path):
+              data = path.read_bytes()
+              fixed = struct.unpack_from('<13I', data, data.index(struct.pack('<I', 0xfeef04bd)))
+              return (fixed[2] >> 16, fixed[2] & 0xffff, fixed[3] >> 16, fixed[3] & 0xffff)
+
+
+          def tga(color):
+              # Uncompressed 1x1 RGB image with a top-left origin.
+              return bytes.fromhex('000002000000000000000000010001001820') + bytes(color)
+
+
+          assert not app.exists(), 'This must be a clean Windows runner'
+          assert digest(baseline) == '0496a3c4fef4e6447b38aab40db12a74e947471e543b0bf78ccb5778af5a8d82'
+          assert digest(plugin) == 'c719b2dbce7253213be0b0f67de6d88ada3022a7a164ee768d0defe1f338318f'
+          setup(target, '/ID=0', '/LANG=en', '/PLUGINS=none', expected=13)
+          assert not app.exists()
+
+          car = root / 'iRacing/paint/trucks silverado2019'
+          car.mkdir(parents=True)
+          paint_fixtures = {
+              car / 'car_123456.tga': tga((20, 30, 60)),
+              car / 'car_num_123456.tga': tga((60, 40, 20)),
+              car / 'car_num_123456.tga.paintsync-held': tga((110, 20, 50)),
+              car / 'car_num_123456.tga.paintsync-held-active-1': tga((91, 120, 10)),
+              car / 'car_num_123456.tga.paintsync-held.paintsync-archive-test-1': tga((101, 111, 121)),
+              car / 'car_num_123456.tga.tmp': tga((16, 23, 42)),
+              car / 'car_num_123456_ss.tga': tga((50, 91, 16)),
+          }
+          for path, contents in paint_fixtures.items():
+              path.write_bytes(contents)
+          data.mkdir(parents=True, exist_ok=True)
+          settings.write_text(
+              '[App]\nCustomerID=123456\nSeconds=0.5\nRoot=' + str(car.parent) + '\n'
+              '[Appearance]\nLanguage=en\nTheme=2\n[Updates]\nAutomatic=0\n'
+              '[ReleaseFixture]\nUnchanged=Yes\n', encoding='utf-16',
+          )
+          setup(baseline, '/UPDATE', '/PLUGINS=none')
+          assert version(app) == (1, 0, 26, 0)
+          setup(plugin, '/UPDATE', '/PLUGINS=none')
+          metadata = install / 'Plugins/Versions.ini'
+          assert 'Version=1.1.2' in metadata.read_text(encoding='ascii')
+          assert 'Photoshop=1.0.4' in metadata.read_text(encoding='ascii')
+
+          contacts = Path(os.environ['LOCALAPPDATA']) / 'PaintSyncTransfer/regulars.dat'
+          contacts.parent.mkdir(exist_ok=True)
+          contacts.write_bytes(b'isolated sharing fixture')
+          key_file = data / 'license.key'
+          key_file.write_bytes(b'invalid test key')
+          cache = data / 'polar-license.dat'
+          cache.write_bytes(b'invalid test cache')
+          protected_paths = (*paint_fixtures, settings, key_file, cache, contacts)
+          protected = {path: digest(path) for path in protected_paths}
+          old_app = digest(app)
+          held = car / 'car_num_123456.tga.paintsync-held'
+
+          kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+          kernel.CreateFileW.argtypes = [
+              wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+              wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+          ]
+          kernel.CreateFileW.restype = wintypes.HANDLE
+          kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+          lock = kernel.CreateFileW(str(held), 0x80000000, 3, None, 3, 0, None)
+          assert lock not in (None, wintypes.HANDLE(-1).value)
+          try:
+              setup(target, '/UPDATE', '/PLUGINS=none')
+          finally:
+              kernel.CloseHandle(lock)
+          assert {path: digest(path) for path in protected_paths} == protected
+          assert not (set(car.iterdir()) - set(paint_fixtures))
+          assert version(app) == (1, 0, 27, 0) and digest(app) != old_app
+          print('PASS actual 1.0.26 upgrade preserves settings, activation files, contacts, and all number-preview fixtures, including the locked held file.')
+
+          expected = json.loads(os.environ['INSTALLED_EXPECTED'])
+          for name, sha in expected.items():
+              assert digest(install / name) == sha, name
+          reg = r'Software\PaintSync\Setup'
+          with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg) as key:
+              assert winreg.QueryValueEx(key, 'InstalledVersion')[0] == '1.0.27'
+          with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Uninstall\PaintSync') as key:
+              assert winreg.QueryValueEx(key, 'DisplayVersion')[0] == '1.0.27'
+          receivers = install / 'Receiver/PaintSync-Receiver-1.0.0.zip'
+          with zipfile.ZipFile(receivers) as archive:
+              assert archive.testzip() is None
+              assert set(archive.namelist()) == {'PaintSync-Receiver.exe', 'PaintSyncTransfer.dll', 'READ-ME.txt', 'THIRD-PARTY-NOTICES.txt'}
+              assert archive.read('PaintSyncTransfer.dll') == (install / 'PaintSyncTransfer.dll').read_bytes()
+          plugin_versions = metadata.read_bytes()
+          assert b'Version=1.1.2' in plugin_versions and b'Photoshop=1.0.4' in plugin_versions
+          with zipfile.ZipFile(install / 'Plugins/PaintSync-Desktop-Link-1.0.4.ccx') as archive:
+              manifest = json.loads(archive.read('manifest.json'))
+              assert manifest['id'] == 'com.drewtrader.paintsync.photoshop' and manifest['version'] == '1.0.4'
+              adobe_hashes = json.loads((install / 'Plugins/AdobeLinkFiles.json').read_text(encoding='utf-8'))
+              assert adobe_hashes['Photoshop'] == {
+                  name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist()
+              }
+          shipped = app.read_bytes()
+          for phrase in json.loads(os.environ.get('NUMBER_DIAGNOSTICS', '[]')):
+              assert phrase.encode('utf-16le') in shipped, phrase
+
+          # Current or newer compatible plugins survive the app update independently.
+          metadata.write_bytes(plugin_versions.replace(b'Version=1.1.2', b'Version=1.1.3', 1))
+          expected_newer = metadata.read_bytes()
+          marker = install / 'Plugins/preserve-newer.txt'
+          marker.write_text('Preserve the newer compatible plugins', encoding='ascii')
+          setup(target, '/UPDATE', '/PLUGINS=none')
+          assert marker.is_file() and metadata.read_bytes() == expected_newer
+          assert digest(app) == expected['PaintSync.exe']
+          metadata.write_bytes(plugin_versions)
+          print('PASS exact compiled payload, stable version, sharing files, Photoshop 1.0.4, and newer compatible plugin preservation.')
+
+          # Use the shipping executable and a deliberately invalid key to verify the licensed entry point.
+          user32 = ctypes.WinDLL('user32', use_last_error=True)
+          user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
+          user32.GetDlgItem.restype = wintypes.HWND
+          user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+          user32.IsWindowEnabled.argtypes = [wintypes.HWND]
+          user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t]
+          user32.SendMessageW.restype = ctypes.c_ssize_t
+          window_callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+          process = subprocess.Popen([str(app)])
+          try:
+              found = []
+
+              @window_callback
+              def find_window(hwnd, _):
+                  pid = wintypes.DWORD()
+                  user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                  if pid.value == process.pid and user32.GetDlgItem(hwnd, 600):
+                      found.append(hwnd)
+                  return True
+
+              for _ in range(80):
+                  assert process.poll() is None, 'App exited before activating'
+                  user32.EnumWindows(find_window, 0)
+                  if found:
+                      break
+                  time.sleep(.25)
+              assert len(found) == 1, 'Installed app failed to load the activation page'
+              hwnd = found[0]
+              user32.SendMessageW(user32.GetDlgItem(hwnd, 600), 0x0111, 2, 0)
+              start = user32.GetDlgItem(hwnd, 10)
+              assert start and not user32.IsWindowEnabled(start), 'Unlicensed Live Painting control enabled'
+              setup(target, '/UPDATE', '/PLUGINS=none', expected=10)
+              assert process.poll() is None, 'Installer unexpectedly closed the running app'
+              assert {path: path.read_bytes() for path in paint_fixtures} == paint_fixtures
+              user32.SendMessageW(hwnd, 0x0010, 0, 0)
+              assert process.wait(timeout=20) == 0
+          finally:
+              if process.poll() is None:
+                  process.terminate()
+                  process.wait(timeout=8)
+
+          removed = [app, install / 'Plugins', install / 'Receiver/PaintSync-Receiver-1.0.0.zip']
+          setup(install / 'Uninstall.exe')
+          for _ in range(100):
+              if not any(path.exists() for path in removed):
+                  break
+              time.sleep(.2)
+          assert not any(path.exists() for path in removed)
+          for path in (*paint_fixtures, key_file, cache, contacts):
+              assert digest(path) == protected[path], path
+          assert 'Unchanged=Yes' in settings.read_text(encoding='utf-16')
+          print('PASS production app launch, inactive-license gate, running-app update protection, and uninstall preservation.')
+  publish-verified-update:
+    needs: verify-installation
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: write
+    steps:
+      - name: Install public signature verifier
+        run: python -m pip install cryptography==46.0.3
+      - name: Publish verified app and switch its signed updater feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          expected = {'PaintSync-Setup-1.0.27.exe': 'e318638f89a33cad7c30a30e1d41cfe66dca41cf5c8a13ecec5ac5aff979c4b3', 'appcast.xml': '8f3f36eb046dc7158636dabfdf0ee61fc6c2df0d31813296e2f4ed370c3fa10f', 'Read-Me.txt': 'cd8483996c95ce1d5d41fbdd9b7dc669fe8cb3e265084469a793b0fb215093a9', 'SHA256SUMS.txt': '798bede2ac4ee641ca8abbe5a1e0a6f27abee748418685d9575f357ea45a28a1'}
+          previous_feed = 'f7f68ee97d4d2989415e534ca8c70612e9127f83c249155a1c6f63ab8b901a65'
+          release_id = 453892757
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+
+          repo = os.environ['GITHUB_REPOSITORY']; assert repo == 'arcdtrade/PaintSync-Releases'
+          tag = 'v1.0.27'
+          title = 'PaintSync 1.0.27'
+          channel_tag = 'beta-channel'
+          installer = 'PaintSync-Setup-1.0.27.exe'
+          feed = 'appcast.xml'
+
+          def gh(*args):
+              return subprocess.check_output(['gh', *map(str, args)], text=True, timeout=120).strip()
+
+          def release_for_tag(wanted):
+              release = json.loads(gh('api', f'repos/{repo}/releases/tags/{wanted}'))
+              assert release['tag_name'] == wanted and not release['draft']
+              return release
+
+          def assets_by_name(release):
+              assets = {asset['name']: asset for asset in release['assets']}
+              assert len(assets) == len(release['assets']), 'Duplicate release asset names'
+              return assets
+
+          def candidate_release():
+              pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{repo}/releases?per_page=100'))
+              matches = [r for page in pages for r in page if r['name'] == title or r['tag_name'] == tag]
+              assert len(matches) == 1, 'Expected exactly one release or draft for app version 1.0.27'
               release = matches[0]
               assert release['name'] == title and release['id'] == release_id
               assert release['tag_name'] == tag or (release['draft'] and release['tag_name'].startswith('untagged-'))
@@ -514,7 +462,7 @@ jobs:
           import base64, time, urllib.request, xml.etree.ElementTree as ET
           from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-          root = Path(os.environ['RUNNER_TEMP']) / 'publish-plugins-112'; root.mkdir()
+          root = Path(os.environ['RUNNER_TEMP']) / 'publish-app-1027'; root.mkdir()
           release, assets = candidate_release()
           for name, digest in expected.items():
               download_asset(assets[name], root / name, digest)
@@ -522,7 +470,7 @@ jobs:
           ns = '{http://www.andymatuschak.org/xml-namespaces/sparkle}'
           item = ET.fromstring(feed_bytes).find('channel/item')
           enclosure = item.find('enclosure')
-          assert item.findtext(ns + 'version') == '1.1.2'
+          assert item.findtext(ns + 'version') == '1.0.27'
           assert enclosure.get(ns + 'installerArguments') == '/UPDATE'
           assert enclosure.get(ns + 'os') == 'windows-x64'
           base_url = f'https://github.com/{repo}/releases/download'
@@ -552,8 +500,8 @@ jobs:
                       time.sleep(5)
               raise AssertionError(f'Public release artifact does not match the verified bytes: {url}')
 
-          retired = 'appcast-1.1.1.xml'
-          staged = 'appcast-1.1.2.xml'
+          retired = 'appcast-1.0.26.xml'
+          staged = 'appcast-1.0.27.xml'
           live_url = f'{base_url}/{channel_tag}/{feed}'
           new_digest = expected[feed]
 
@@ -570,18 +518,23 @@ jobs:
           if has_hash(active, new_digest):
               assert has_hash(channel.get(retired), previous_feed), 'Active candidate has no matching rollback archive'
           else:
-              assert has_hash(active, previous_feed), 'The active plugin feed changed; stop before publication'
+              assert has_hash(active, previous_feed), 'The active app feed changed; stop before publication'
               assert retired not in channel, 'An existing rollback archive would be overwritten'
               assert staged not in channel or has_hash(channel[staged], new_digest), 'Existing staged feed differs'
 
+          latest = json.loads(gh('api', f'repos/{repo}/releases/latest'))['tag_name']
+          assert latest in ('v1.0.26', tag), 'The latest app changed after the release was prepared'
           if release['draft']:
               gh('api', '--method', 'PATCH', f"repos/{repo}/releases/{release['id']}",
-                 '-f', 'tag_name=' + tag, '-F', 'draft=false', '-F', 'prerelease=false', '-f', 'make_latest=false')
+                 '-f', 'tag_name=' + tag, '-F', 'draft=false', '-F', 'prerelease=false', '-f', 'make_latest=true')
           release, _ = candidate_release()
           assert not release['draft'] and not release['prerelease']
-          assert json.loads(gh('api', f'repos/{repo}/releases/latest'))['tag_name'] != tag, 'Plugin release became the app download'
+          assert json.loads(gh('api', f'repos/{repo}/releases/latest'))['tag_name'] == tag, 'The verified app release is not marked latest'
           wait_for_hash(installer_url, expected[installer], len(raw), attempts=12)
           wait_for_hash(f'{base_url}/{tag}/{feed}', new_digest, 65536, attempts=12)
+          for name, digest in expected.items():
+              if name not in (installer, feed):
+                  wait_for_hash(f'{base_url}/{tag}/{name}', digest, (root / name).stat().st_size, attempts=12)
 
           if has_hash(active, previous_feed):
               if staged not in channel:
@@ -606,4 +559,15 @@ jobs:
           channel = channel_assets()
           assert has_hash(channel.get(feed), new_digest) and has_hash(channel.get(retired), previous_feed)
           wait_for_hash(live_url, new_digest, 65536, attempts=30)
-          print(f'PASS Windows-verified plugin 1.1.2 published, signed feed live, previous feed retained. {live_url}')
+          release_url = f'https://github.com/{repo}/releases/tag/{tag}'
+          checks_url = f"https://github.com/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          channel_notes = root / 'channel-notes.txt'
+          channel_notes.write_text(
+              f'The active Windows feed offers [PaintSync 1.0.27]({release_url}).\n\n'
+              'In PaintSync, use Settings > General > Check for updates. Save artwork and stop autosave before installing.\n\n'
+              f'[Windows installation and upgrade checks passed]({checks_url}).\n',
+              encoding='utf-8',
+          )
+          gh('release', 'edit', channel_tag, '--repo', repo, '--notes-file', channel_notes)
+          print(f'PASS Windows-verified PaintSync 1.0.27 published, signed app feed live, previous feed retained. {live_url}')
+
